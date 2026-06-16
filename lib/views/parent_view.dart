@@ -174,7 +174,7 @@ class _ParentViewState extends State<ParentView> {
           if (!isQcmSingleHole) {
             setState(
               () => _errorMessage =
-                  "❌ Exercice n°\${i + 1} : \$nbTrous trous [?] détectés "
+                  "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
                   "mais 'reponsesMultiples' est absent ou vide.\n"
                   "Corrige le JSON ou relance la génération.",
             );
@@ -186,8 +186,8 @@ class _ParentViewState extends State<ParentView> {
             reponsesMultiples.length != nbTrous) {
           setState(
             () => _errorMessage =
-                "❌ Exercice n°\${i + 1} : \$nbTrous trous [?] détectés "
-                "mais \${reponsesMultiples.length} réponse(s) dans 'reponsesMultiples'.\n"
+                "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
+                "mais ${reponsesMultiples.length} réponse(s) dans 'reponsesMultiples'.\n"
                 "Le nombre doit être identique.",
           );
           return;

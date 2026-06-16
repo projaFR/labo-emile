@@ -80,13 +80,13 @@ class _FlashcardsViewState extends State<FlashcardsView> {
           BoxShadow(
             // ✅ FIX : withOpacity à la place de withValues(alpha:) pour une
             //          compatibilité maximale avec toutes les versions Flutter.
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
         ],
         border: Border.all(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           width: 1,
         ),
       ),
@@ -123,7 +123,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
         boxShadow: [
           BoxShadow(
             // ✅ FIX : withOpacity à la place de withValues(alpha:)
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -266,11 +266,19 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                 children: [
                   if (deck.length > 1)
                     _buildTiltedGhostCard(
-                      1, const Offset(0, 6), -0.04, cardWidth, cardHeight,
+                      1,
+                      const Offset(0, 6),
+                      -0.04,
+                      cardWidth,
+                      cardHeight,
                     ),
                   if (deck.length > 2)
                     _buildTiltedGhostCard(
-                      2, const Offset(0, 12), 0.04, cardWidth, cardHeight,
+                      2,
+                      const Offset(0, 12),
+                      0.04,
+                      cardWidth,
+                      cardHeight,
                     ),
                   TweenAnimationBuilder(
                     tween: Tween<double>(begin: 0, end: showAnswer ? 180 : 0),
@@ -286,7 +294,11 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                             ? Transform(
                                 transform: Matrix4.identity()..rotateY(pi),
                                 alignment: Alignment.center,
-                                child: _buildCardUI(true, cardWidth, cardHeight),
+                                child: _buildCardUI(
+                                  true,
+                                  cardWidth,
+                                  cardHeight,
+                                ),
                               )
                             : _buildCardUI(false, cardWidth, cardHeight),
                       );

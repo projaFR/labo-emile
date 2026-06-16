@@ -165,15 +165,15 @@ class _LaunchScreenState extends State<LaunchScreen>
                           width: 120,
                           height: 120,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.3),
+                              color: Colors.white.withValues(alpha: 0.3),
                               width: 2,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.blue.withOpacity(0.4),
+                                color: Colors.blue.withValues(alpha: 0.4),
                                 blurRadius: 30,
                                 spreadRadius: 10,
                               ),
@@ -218,7 +218,7 @@ class _LaunchScreenState extends State<LaunchScreen>
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text(
@@ -257,8 +257,8 @@ class _LaunchScreenState extends State<LaunchScreen>
                                 width: 8,
                                 height: 8,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(
-                                    0.3 + phase * 0.7,
+                                  color: Colors.white.withValues(
+                                    alpha: 0.3 + phase * 0.7,
                                   ),
                                   shape: BoxShape.circle,
                                 ),
