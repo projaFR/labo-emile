@@ -581,8 +581,6 @@ class _ExerciseViewState extends State<ExerciseView> {
                   ),
                 ),
               ),
-            ),
-          ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
