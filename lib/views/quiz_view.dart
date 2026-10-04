@@ -201,9 +201,10 @@ class _QuizViewState extends State<QuizView> {
 
     final currentQuiz = _shuffledQuiz[_currentIndex];
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -236,75 +237,68 @@ class _QuizViewState extends State<QuizView> {
             elevation: 2,
             child: Padding(
               padding: const EdgeInsets.all(20.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: Text(
-                  currentQuiz.question,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2C3E50),
-                  ),
+              child: Text(
+                currentQuiz.question,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2C3E50),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: currentQuiz.options.length,
-              itemBuilder: (context, index) {
-                final option = currentQuiz.options[index];
-                final bool isCorrectOption = (index == currentQuiz.indexCorrect);
-                final bool isThisSelected = (index == _selectedOptionIndex);
-                Color btnColor = Colors.white;
-                Color textColor = Colors.black87;
+          // Options : taille fixe par bouton, plus de Expanded/ListView
+          ...List.generate(currentQuiz.options.length, (index) {
+            final option = currentQuiz.options[index];
+            final bool isCorrectOption = (index == currentQuiz.indexCorrect);
+            final bool isThisSelected = (index == _selectedOptionIndex);
+            Color btnColor = Colors.white;
+            Color textColor = Colors.black87;
 
-                if (_isSubmitted) {
-                  if (isCorrectOption) {
-                    btnColor = Colors.green.shade100;
-                    textColor = Colors.green.shade900;
-                  } else if (isThisSelected) {
-                    btnColor = Colors.red.shade100;
-                    textColor = Colors.red.shade900;
-                  }
-                }
+            if (_isSubmitted) {
+              if (isCorrectOption) {
+                btnColor = Colors.green.shade100;
+                textColor = Colors.green.shade900;
+              } else if (isThisSelected) {
+                btnColor = Colors.red.shade100;
+                textColor = Colors.red.shade900;
+              }
+            }
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10.0),
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitted
-                          ? null
-                          : () => _validateSelection(index, currentQuiz),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: btnColor,
-                        side: BorderSide(
-                          color: _isSubmitted && isCorrectOption
-                              ? Colors.green
-                              : Colors.black12,
-                          width: 2,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        option,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10.0),
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isSubmitted
+                      ? null
+                      : () => _validateSelection(index, currentQuiz),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: btnColor,
+                    side: BorderSide(
+                      color: _isSubmitted && isCorrectOption
+                          ? Colors.green
+                          : Colors.black12,
+                      width: 2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
+                  child: Text(
+                    option,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
           if (_isSubmitted) ...[
             Container(
               padding: const EdgeInsets.all(8),
