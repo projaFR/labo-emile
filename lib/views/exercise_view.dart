@@ -443,9 +443,10 @@ class _ExerciseViewState extends State<ExerciseView> {
     final bool allSlotsFilled = !_selectedOptions.contains('');
     final bool canValidate = isQcm ? allSlotsFilled : true;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'Exercice ${_currentIndex + 1} / ${widget.lesson.exercices.length}',
@@ -454,21 +455,20 @@ class _ExerciseViewState extends State<ExerciseView> {
               color: Colors.blueGrey,
               fontSize: 13,
             ),
+            textAlign: TextAlign.center,
           ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Card(
-                color: const Color(0xFFF8FAFC),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+          const SizedBox(height: 8),
+          Card(
+            color: const Color(0xFFF8FAFC),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                       Text(
                         currentEx.consigne,
                         textAlign: TextAlign.center,
@@ -583,7 +583,7 @@ class _ExerciseViewState extends State<ExerciseView> {
               ),
             ),
           ),
-
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -617,6 +617,7 @@ class _ExerciseViewState extends State<ExerciseView> {
               ),
             ),
           ),
+          const SizedBox(height: 8),
         ],
       ),
     );
