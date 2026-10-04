@@ -443,181 +443,197 @@ class _ExerciseViewState extends State<ExerciseView> {
     final bool allSlotsFilled = !_selectedOptions.contains('');
     final bool canValidate = isQcm ? allSlotsFilled : true;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Exercice ${_currentIndex + 1} / ${widget.lesson.exercices.length}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.blueGrey,
-              fontSize: 13,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Card(
-            color: const Color(0xFFF8FAFC),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                      Text(
-                        currentEx.consigne,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildQuestionWithSlots(currentEx),
-                      const SizedBox(height: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Adapte les tailles selon l'espace vertical disponible
+        final double availH = constraints.maxHeight;
+        final bool isCompact = availH < 500;
+        final double btnH = isCompact ? 38.0 : 46.0;
+        final double btnSpacing = isCompact ? 5.0 : 8.0;
+        final double innerPad = isCompact ? 10.0 : 16.0;
+        final double gap1 = isCompact ? 10.0 : 20.0;
+        final double gap2 = isCompact ? 12.0 : 24.0;
+        final double outerPad = isCompact ? 8.0 : 12.0;
+        final double btnFontSize = isCompact ? 13.0 : 14.0;
+        final double consoleFontSize = isCompact ? 12.0 : 13.0;
 
-                      // Boutons options QCM (mélangés)
-                      if (isQcm)
-                        ..._shuffledOptions.map((option) {
-                          final bool isSelected = _selectedOptions.any(
-                            (s) =>
-                                s.trim().toUpperCase() ==
-                                option.trim().toUpperCase(),
-                          );
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(outerPad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Exercice ${_currentIndex + 1} / ${widget.lesson.exercices.length}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey,
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: outerPad * 0.67),
+              Card(
+                color: const Color(0xFFF8FAFC),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(innerPad),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                          Text(
+                            currentEx.consigne,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: consoleFontSize,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: gap1),
+                          _buildQuestionWithSlots(currentEx),
+                          SizedBox(height: gap2),
 
-                          Color? btnColor;
-                          Color? textColor;
-                          if (_isSubmitted) {
-                            final bool isCorrectOption =
-                                currentEx.reponsesMultiples.isNotEmpty
-                                ? currentEx.reponsesMultiples.any(
-                                    (r) =>
-                                        r.trim().toUpperCase() ==
-                                        option.trim().toUpperCase(),
-                                  )
-                                : option.trim().toUpperCase() ==
-                                      currentEx.reponseAttendue
-                                          .trim()
-                                          .toUpperCase();
-                            final bool wasChosen = _selectedOptions.any(
-                              (s) =>
-                                  s.trim().toUpperCase() ==
-                                  option.trim().toUpperCase(),
-                            );
-                            if (isCorrectOption) {
-                              btnColor = Colors.green.shade100;
-                              textColor = Colors.green.shade900;
-                            } else if (wasChosen) {
-                              btnColor = Colors.red.shade100;
-                              textColor = Colors.red.shade900;
-                            }
-                          } else if (isSelected) {
-                            btnColor = Colors.blue.shade50;
-                            textColor = Colors.blue.shade800;
-                          }
+                          // Boutons options QCM (mélangés)
+                          if (isQcm)
+                            ..._shuffledOptions.map((option) {
+                              final bool isSelected = _selectedOptions.any(
+                                (s) =>
+                                    s.trim().toUpperCase() ==
+                                    option.trim().toUpperCase(),
+                              );
 
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 46,
-                              child: OutlinedButton(
-                                onPressed: _isSubmitted
-                                    ? null
-                                    : () => _fillSlot(option),
-                                style: OutlinedButton.styleFrom(
-                                  backgroundColor: btnColor ?? Colors.white,
-                                  side: BorderSide(
-                                    color: isSelected && !_isSubmitted
-                                        ? Colors.blue
-                                        : Colors.black12,
-                                    width: isSelected && !_isSubmitted ? 2 : 1,
+                              Color? btnColor;
+                              Color? textColor;
+                              if (_isSubmitted) {
+                                final bool isCorrectOption =
+                                    currentEx.reponsesMultiples.isNotEmpty
+                                    ? currentEx.reponsesMultiples.any(
+                                        (r) =>
+                                            r.trim().toUpperCase() ==
+                                            option.trim().toUpperCase(),
+                                      )
+                                    : option.trim().toUpperCase() ==
+                                          currentEx.reponseAttendue
+                                              .trim()
+                                              .toUpperCase();
+                                final bool wasChosen = _selectedOptions.any(
+                                  (s) =>
+                                      s.trim().toUpperCase() ==
+                                      option.trim().toUpperCase(),
+                                );
+                                if (isCorrectOption) {
+                                  btnColor = Colors.green.shade100;
+                                  textColor = Colors.green.shade900;
+                                } else if (wasChosen) {
+                                  btnColor = Colors.red.shade100;
+                                  textColor = Colors.red.shade900;
+                                }
+                              } else if (isSelected) {
+                                btnColor = Colors.blue.shade50;
+                                textColor = Colors.blue.shade800;
+                              }
+
+                              return Padding(
+                                padding: EdgeInsets.only(bottom: btnSpacing),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: btnH,
+                                  child: OutlinedButton(
+                                    onPressed: _isSubmitted
+                                        ? null
+                                        : () => _fillSlot(option),
+                                    style: OutlinedButton.styleFrom(
+                                      backgroundColor: btnColor ?? Colors.white,
+                                      side: BorderSide(
+                                        color: isSelected && !_isSubmitted
+                                            ? Colors.blue
+                                            : Colors.black12,
+                                        width: isSelected && !_isSubmitted ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      option,
+                                      style: TextStyle(
+                                        fontSize: btnFontSize,
+                                        fontWeight: isSelected && !_isSubmitted
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: textColor,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                child: Text(
-                                  option,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: isSelected && !_isSubmitted
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: textColor,
-                                  ),
+                              );
+                            }),
+
+                          if (_isSubmitted)
+                            Container(
+                              margin: const EdgeInsets.only(top: 10),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _isCorrect
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                _isCorrect
+                                    ? 'Bravo ! 🎉'
+                                    : 'Aide : ${currentEx.astuceErreur}',
+                                style: TextStyle(
+                                  color: _isCorrect
+                                      ? Colors.green.shade900
+                                      : Colors.red.shade900,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                          );
-                        }),
-
-                      if (_isSubmitted)
-                        Container(
-                          margin: const EdgeInsets.only(top: 10),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: _isCorrect
-                                ? Colors.green.shade50
-                                : Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            _isCorrect
-                                ? 'Bravo ! 🎉'
-                                : 'Aide : ${currentEx.astuceErreur}',
-                            style: TextStyle(
-                              color: _isCorrect
-                                  ? Colors.green.shade900
-                                  : Colors.red.shade900,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
+                        ],
+                      ),
+                    ),
+                  ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  onPressed: _isSubmitted
+                      ? _nextQuestion
+                      : (canValidate
+                            ? () => isQcm
+                                  ? _validateQcm(currentEx)
+                                  : _validateNumericAnswers(currentEx)
+                            : null),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isSubmitted
+                        ? Colors.blue
+                        : (canValidate ? Colors.green : Colors.grey.shade400),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    _isSubmitted
+                        ? 'SUIVANT ➡️'
+                        : (hasVisibleSlots && !allSlotsFilled
+                              ? 'REMPLIS TOUTES LES CASES 👆'
+                              : '🚀 VALIDER MA RÉPONSE'),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
               ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _isSubmitted
-                  ? _nextQuestion
-                  : (canValidate
-                        ? () => isQcm
-                              ? _validateQcm(currentEx)
-                              : _validateNumericAnswers(currentEx)
-                        : null),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isSubmitted
-                    ? Colors.blue
-                    : (canValidate ? Colors.green : Colors.grey.shade400),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                _isSubmitted
-                    ? 'SUIVANT ➡️'
-                    : (hasVisibleSlots && !allSlotsFilled
-                          ? 'REMPLIS TOUTES LES CASES 👆'
-                          : '🚀 VALIDER MA RÉPONSE'),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
-              ),
-            ),
+              const SizedBox(height: 6),
+            ],
           ),
-          const SizedBox(height: 8),
-        ],
-      ),
+        );
+      },
     );
   }
 }

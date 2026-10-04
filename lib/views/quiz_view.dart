@@ -201,151 +201,163 @@ class _QuizViewState extends State<QuizView> {
 
     final currentQuiz = _shuffledQuiz[_currentIndex];
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double availH = constraints.maxHeight;
+        final bool isCompact = availH < 500;
+        final double outerPad = isCompact ? 10.0 : 16.0;
+        final double gap = isCompact ? 10.0 : 16.0;
+        final double cardPad = isCompact ? 12.0 : 20.0;
+        final double questionFontSize = isCompact ? 15.0 : 18.0;
+        final double btnH = isCompact ? 42.0 : 52.0;
+        final double btnSpacing = isCompact ? 6.0 : 10.0;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(outerPad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                "Question ${_currentIndex + 1} / ${_shuffledQuiz.length}",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blueGrey,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Text(
+                    "Question ${_currentIndex + 1} / ${_shuffledQuiz.length}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueGrey,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _timeLeft <= 5 ? Colors.red : Colors.orange,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      "⏳ $_timeLeft s",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _timeLeft <= 5 ? Colors.red : Colors.orange,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  "⏳ $_timeLeft s",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+              SizedBox(height: gap),
+              Card(
+                elevation: 2,
+                child: Padding(
+                  padding: EdgeInsets.all(cardPad),
+                  child: Text(
+                    currentQuiz.question,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: questionFontSize,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF2C3E50),
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                currentQuiz.question,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2C3E50),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Options : taille fixe par bouton, plus de Expanded/ListView
-          ...List.generate(currentQuiz.options.length, (index) {
-            final option = currentQuiz.options[index];
-            final bool isCorrectOption = (index == currentQuiz.indexCorrect);
-            final bool isThisSelected = (index == _selectedOptionIndex);
-            Color btnColor = Colors.white;
-            Color textColor = Colors.black87;
+              SizedBox(height: gap),
+              ...List.generate(currentQuiz.options.length, (index) {
+                final option = currentQuiz.options[index];
+                final bool isCorrectOption = (index == currentQuiz.indexCorrect);
+                final bool isThisSelected = (index == _selectedOptionIndex);
+                Color btnColor = Colors.white;
+                Color textColor = Colors.black87;
 
-            if (_isSubmitted) {
-              if (isCorrectOption) {
-                btnColor = Colors.green.shade100;
-                textColor = Colors.green.shade900;
-              } else if (isThisSelected) {
-                btnColor = Colors.red.shade100;
-                textColor = Colors.red.shade900;
-              }
-            }
+                if (_isSubmitted) {
+                  if (isCorrectOption) {
+                    btnColor = Colors.green.shade100;
+                    textColor = Colors.green.shade900;
+                  } else if (isThisSelected) {
+                    btnColor = Colors.red.shade100;
+                    textColor = Colors.red.shade900;
+                  }
+                }
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10.0),
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isSubmitted
-                      ? null
-                      : () => _validateSelection(index, currentQuiz),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: btnColor,
-                    side: BorderSide(
-                      color: _isSubmitted && isCorrectOption
-                          ? Colors.green
-                          : Colors.black12,
-                      width: 2,
+                return Padding(
+                  padding: EdgeInsets.only(bottom: btnSpacing),
+                  child: SizedBox(
+                    height: btnH,
+                    child: ElevatedButton(
+                      onPressed: _isSubmitted
+                          ? null
+                          : () => _validateSelection(index, currentQuiz),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: btnColor,
+                        side: BorderSide(
+                          color: _isSubmitted && isCorrectOption
+                              ? Colors.green
+                              : Colors.black12,
+                          width: 2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        option,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                  ),
+                );
+              }),
+              if (_isSubmitted) ...[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: _selectedOptionIndex == currentQuiz.indexCorrect
+                        ? Colors.green.shade50
+                        : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    option,
+                    _selectedOptionIndex == currentQuiz.indexCorrect
+                        ? (_timeLeft > 10
+                              ? "⚡ BONUS RAPIDITÉ ACTIVÉ ! Double Diamant ! (+2 💎)"
+                              : "✅ Bonne réponse ! (+1 💎)")
+                        : "❌ Ce n'est pas la bonne réponse.",
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: textColor,
+                      color: _selectedOptionIndex == currentQuiz.indexCorrect
+                          ? Colors.green.shade800
+                          : Colors.red.shade800,
+                      fontSize: 13,
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-          if (_isSubmitted) ...[
-            Container(
-              padding: const EdgeInsets.all(8),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: _selectedOptionIndex == currentQuiz.indexCorrect
-                    ? Colors.green.shade50
-                    : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _selectedOptionIndex == currentQuiz.indexCorrect
-                    ? (_timeLeft > 10
-                          ? "⚡ BONUS RAPIDITÉ ACTIVÉ ! Double Diamant ! (+2 💎)"
-                          : "✅ Bonne réponse ! (+1 💎)")
-                    : "❌ Ce n'est pas la bonne réponse.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: _selectedOptionIndex == currentQuiz.indexCorrect
-                      ? Colors.green.shade800
-                      : Colors.red.shade800,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _nextQuestion,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: _nextQuestion,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      "QUESTION SUIVANTE ➡️",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
-                child: const Text(
-                  "QUESTION SUIVANTE ➡️",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
