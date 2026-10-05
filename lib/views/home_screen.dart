@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -121,6 +122,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _loadProgress() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Recharger les leçons personnalisées sauvegardées
+    final String? customJson = prefs.getString('custom_lessons');
+    if (customJson != null) {
+      try {
+        final Map<String, dynamic> decoded = jsonDecode(customJson);
+        decoded.forEach((matiere, lessonsJson) {
+          final List<LessonModel> lessons = (lessonsJson as List)
+              .map((l) => LessonModel.fromJson(l as Map<String, dynamic>))
+              .toList();
+          if (!_database.containsKey(matiere)) {
+            _database[matiere] = [];
+          }
+          for (final lesson in lessons) {
+            // Éviter les doublons avec les leçons initiales
+            final alreadyExists = _database[matiere]!
+                .any((l) => l.titre == lesson.titre);
+            if (!alreadyExists) {
+              _database[matiere]!.add(lesson);
+            }
+          }
+        });
+      } catch (_) {
+        // JSON corrompu → on ignore, les leçons de base restent
+      }
+    }
+
     setState(() {
       _totalDiamonds = prefs.getInt('emile_diamonds') ?? 0;
       _database.forEach((matiere, lessons) {
@@ -136,6 +164,26 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
     });
+  }
+
+  Future<void> _saveCustomLessons() async {
+    final prefs = await SharedPreferences.getInstance();
+    // On ne sauvegarde que les leçons qui ne sont PAS dans la base initiale
+    final initialTitles = <String>{};
+    InitialDatabase.data.forEach((_, lessons) {
+      for (final l in lessons) initialTitles.add(l.titre);
+    });
+
+    final Map<String, List<Map<String, dynamic>>> toSave = {};
+    _database.forEach((matiere, lessons) {
+      final custom = lessons
+          .where((l) => !initialTitles.contains(l.titre))
+          .map((l) => l.toJson())
+          .toList();
+      if (custom.isNotEmpty) toSave[matiere] = custom;
+    });
+
+    await prefs.setString('custom_lessons', jsonEncode(toSave));
   }
 
   void _unlockLessonStar(String lessonTitle, int starIndex) async {
@@ -386,6 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedLesson = newLesson;
             _lessonsRewards[newLesson.titre] = [false, false, false];
           });
+          _saveCustomLessons();
         },
         onDeleteCurrentLesson: () {
           Navigator.pop(context);
@@ -408,6 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedLesson = lessons.first;
             }
           });
+          _saveCustomLessons();
         },
       ),
     );

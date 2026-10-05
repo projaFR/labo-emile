@@ -18,6 +18,26 @@ class LessonModel {
     required this.exercices,
     required this.quiz,
   });
+
+  Map<String, dynamic> toJson() => {
+    'titre': titre,
+    'astuces': astuces.map((a) => a.toJson()).toList(),
+    'exercices': exercices.map((e) => e.toJson()).toList(),
+    'quiz': quiz.map((q) => q.toJson()).toList(),
+  };
+
+  factory LessonModel.fromJson(Map<String, dynamic> json) => LessonModel(
+    titre: json['titre'] as String,
+    astuces: (json['astuces'] as List)
+        .map((a) => FlashcardModel.fromJson(a as Map<String, dynamic>))
+        .toList(),
+    exercices: (json['exercices'] as List)
+        .map((e) => ExerciseModel.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    quiz: (json['quiz'] as List)
+        .map((q) => QuizModel.fromJson(q as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class FlashcardModel {
@@ -25,6 +45,13 @@ class FlashcardModel {
   final String reponse;
 
   const FlashcardModel({required this.question, required this.reponse});
+
+  Map<String, dynamic> toJson() => {'question': question, 'reponse': reponse};
+
+  factory FlashcardModel.fromJson(Map<String, dynamic> json) => FlashcardModel(
+    question: json['question'] as String,
+    reponse: json['reponse'] as String,
+  );
 }
 
 class ExerciseModel {
@@ -51,6 +78,24 @@ class ExerciseModel {
     if (reponsesMultiples.isNotEmpty) return ExerciseType.numericBlanks;
     return ExerciseType.singleInput;
   }
+
+  Map<String, dynamic> toJson() => {
+    'question': question,
+    'consigne': consigne,
+    'reponseAttendue': reponseAttendue,
+    'reponsesMultiples': reponsesMultiples,
+    'options': options,
+    'astuceErreur': astuceErreur,
+  };
+
+  factory ExerciseModel.fromJson(Map<String, dynamic> json) => ExerciseModel(
+    question: json['question'] as String,
+    consigne: json['consigne'] as String,
+    reponseAttendue: json['reponseAttendue'] as String? ?? "",
+    reponsesMultiples: List<String>.from(json['reponsesMultiples'] ?? []),
+    options: List<String>.from(json['options'] ?? []),
+    astuceErreur: json['astuceErreur'] as String,
+  );
 }
 
 class QuizModel {
@@ -63,4 +108,16 @@ class QuizModel {
     required this.options,
     required this.indexCorrect,
   });
+
+  Map<String, dynamic> toJson() => {
+    'question': question,
+    'options': options,
+    'indexCorrect': indexCorrect,
+  };
+
+  factory QuizModel.fromJson(Map<String, dynamic> json) => QuizModel(
+    question: json['question'] as String,
+    options: List<String>.from(json['options']),
+    indexCorrect: json['indexCorrect'] as int,
+  );
 }
