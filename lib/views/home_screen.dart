@@ -474,13 +474,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _getBadgeName(),
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 15,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _getBadgeName(),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 15,
+              ),
+            ),
+            const Text(
+              'v1.3.0',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 10,
+              ),
+            ),
+          ],
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         centerTitle: true,
