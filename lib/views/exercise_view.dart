@@ -447,15 +447,15 @@ class _ExerciseViewState extends State<ExerciseView> {
       builder: (context, constraints) {
         // Adapte les tailles selon l'espace vertical disponible
         final double availH = constraints.maxHeight;
-        final bool isCompact = availH < 500;
-        final double btnH = isCompact ? 38.0 : 46.0;
-        final double btnSpacing = isCompact ? 5.0 : 8.0;
-        final double innerPad = isCompact ? 10.0 : 16.0;
-        final double gap1 = isCompact ? 10.0 : 20.0;
-        final double gap2 = isCompact ? 12.0 : 24.0;
-        final double outerPad = isCompact ? 8.0 : 12.0;
+        final bool isCompact = availH < 560;   // seuil rehaussé pour couvrir plus d'écrans
+        final double btnH = isCompact ? 36.0 : 46.0;
+        final double btnSpacing = isCompact ? 4.0 : 8.0;
+        final double innerPad = isCompact ? 8.0 : 16.0;
+        final double gap1 = isCompact ? 6.0 : 20.0;
+        final double gap2 = isCompact ? 8.0 : 24.0;
+        final double outerPad = isCompact ? 6.0 : 12.0;
         final double btnFontSize = isCompact ? 13.0 : 14.0;
-        final double consoleFontSize = isCompact ? 12.0 : 13.0;
+        final double consoleFontSize = isCompact ? 11.0 : 13.0;
 
         return SingleChildScrollView(
           padding: EdgeInsets.all(outerPad),

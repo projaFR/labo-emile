@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/lesson_model.dart';
 
 class ParentView extends StatefulWidget {
@@ -99,13 +101,62 @@ class _ParentViewState extends State<ParentView> {
     );
   }
 
+  Future<void> _openClaude() async {
+    final uri = Uri.parse(
+      'https://claude.ai/new?q=Le%C3%A7on%20pour%20le%20Labo%20d%27%C3%89mile',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _pasteAndImport() async {
+    ClipboardData? data;
+    try {
+      data = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (_) {
+      setState(() {
+        _errorMessage =
+            '⚠️ Le navigateur a bloqué l\'accès au presse-papiers. '
+            'Colle le texte manuellement dans le champ ci-dessous.';
+      });
+      return;
+    }
+    final text = data?.text ?? '';
+    if (text.isEmpty) {
+      setState(() {
+        _errorMessage =
+            '⚠️ Le presse-papiers est vide. Copie d\'abord le JSON '
+            'depuis Claude, puis réessaie.';
+      });
+      return;
+    }
+    _jsonController.text = text;
+    _importJsonLesson();
+  }
+
+  /// Nettoie le texte collé : supprime les balises ```json / ```,
+  /// et tout ce qui précède le premier { ou suit le dernier }.
+  String _cleanJson(String raw) {
+    // Enlever les balises markdown ```json ... ``` ou ``` ... ```
+    String s = raw.replaceAll(RegExp(r'```json\s*', caseSensitive: false), '');
+    s = s.replaceAll(RegExp(r'```\s*'), '');
+    // Garder uniquement ce qui est entre le premier { et le dernier }
+    final start = s.indexOf('{');
+    final end = s.lastIndexOf('}');
+    if (start != -1 && end != -1 && end > start) {
+      s = s.substring(start, end + 1);
+    }
+    return s.trim();
+  }
+
   void _importJsonLesson() {
     setState(() => _errorMessage = null);
     final rawText = _jsonController.text.trim();
     if (rawText.isEmpty) return;
 
     try {
-      final Map<String, dynamic> parsedJson = jsonDecode(rawText);
+      final Map<String, dynamic> parsedJson = jsonDecode(_cleanJson(rawText));
 
       // ✅ FIX : Validation explicite des champs obligatoires avant de continuer.
       //          Une leçon sans titre ou sans contenu ne s'importe pas silencieusement.
@@ -332,12 +383,34 @@ class _ParentViewState extends State<ParentView> {
               ),
             ),
             const SizedBox(height: 8),
+            // Bouton "Créer une leçon avec Claude"
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openClaude,
+                icon: const Icon(Icons.auto_awesome, color: Colors.deepPurple),
+                label: const Text(
+                  'Créer une leçon avec Claude ✨',
+                  style: TextStyle(
+                    color: Colors.deepPurple,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.deepPurple),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
             TextField(
               controller: _jsonController,
               maxLines: 5,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               decoration: InputDecoration(
-                hintText: 'Colle le code JSON de Gemini ici...',
+                hintText: 'Colle le code JSON de Claude ici...',
                 border: const OutlineInputBorder(),
                 fillColor: Colors.grey.shade50,
                 filled: true,
@@ -347,32 +420,61 @@ class _ParentViewState extends State<ParentView> {
               const SizedBox(height: 8),
               Text(
                 _errorMessage!,
-                style: const TextStyle(
-                  color: Colors.red,
+                style: TextStyle(
+                  color: _errorMessage!.startsWith('⚠️')
+                      ? Colors.orange.shade800
+                      : Colors.red,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _importJsonLesson,
-                icon: const Icon(Icons.download_done),
-                label: const Text(
-                  "Analyser et Activer la Leçon 🚀",
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 10),
+            // Boutons côte à côte : Coller&importer  |  Analyser&Activer
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: _pasteAndImport,
+                      icon: const Icon(Icons.content_paste),
+                      label: const Text(
+                        'Coller et importer',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: _importJsonLesson,
+                      icon: const Icon(Icons.download_done),
+                      label: const Text(
+                        'Analyser 🚀',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const Divider(height: 40),
             const Text(

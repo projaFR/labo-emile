@@ -26,7 +26,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late ConfettiController _confettiController;
   final Map<String, List<bool>> _lessonsRewards = {};
-  final Map<String, List<LessonModel>> _database = InitialDatabase.data;
+
+  // Copie indépendante de la base initiale — évite de polluer InitialDatabase.data
+  // (qui est static final et partagé) avec les leçons custom.
+  final Map<String, List<LessonModel>> _database = {
+    for (final e in InitialDatabase.data.entries)
+      e.key: List<LessonModel>.from(e.value),
+  };
+
+  // Titres des leçons initiales, capturés une fois pour toujours au démarrage.
+  // Utilisé par _saveCustomLessons pour ne sauvegarder QUE les leçons ajoutées.
+  late final Set<String> _initialTitles = {
+    for (final lessons in InitialDatabase.data.values)
+      for (final l in lessons) l.titre,
+  };
 
   // ── 100 niveaux RPG ──────────────────────────────────────────────────────
   static const List<String> _rankTitles = [
@@ -168,21 +181,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _saveCustomLessons() async {
     final prefs = await SharedPreferences.getInstance();
-    // On ne sauvegarde que les leçons qui ne sont PAS dans la base initiale
-    final initialTitles = <String>{};
-    InitialDatabase.data.forEach((_, lessons) {
-      for (final l in lessons) initialTitles.add(l.titre);
-    });
-
+    // On ne sauvegarde que les leçons absentes de la base initiale
     final Map<String, List<Map<String, dynamic>>> toSave = {};
     _database.forEach((matiere, lessons) {
       final custom = lessons
-          .where((l) => !initialTitles.contains(l.titre))
+          .where((l) => !_initialTitles.contains(l.titre))
           .map((l) => l.toJson())
           .toList();
       if (custom.isNotEmpty) toSave[matiere] = custom;
     });
-
     await prefs.setString('custom_lessons', jsonEncode(toSave));
   }
 
