@@ -1,11 +1,12 @@
 {
-    "name": "myapp",
-    "short_name": "myapp",
-    "start_url": ".",
+    "name": "Le Labo d'Émile",
+    "short_name": "Labo d'Émile",
+    "start_url": "/labo-emile/",
+    "scope": "/labo-emile/",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Application éducative pour Émile.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

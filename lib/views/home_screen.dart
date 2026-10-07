@@ -190,7 +190,19 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList();
       if (custom.isNotEmpty) toSave[matiere] = custom;
     });
-    await prefs.setString('custom_lessons', jsonEncode(toSave));
+    final String encoded = jsonEncode(toSave);
+    await prefs.setString('custom_lessons', encoded);
+    // Vérification immédiate : relire pour s'assurer que c'est bien persisté
+    final String? verify = prefs.getString('custom_lessons');
+    if (verify != encoded && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Sauvegarde impossible sur ce navigateur.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
   }
 
   void _unlockLessonStar(String lessonTitle, int starIndex) async {
@@ -430,7 +442,18 @@ class _HomeScreenState extends State<HomeScreen> {
             _totalDiamonds = 0;
             _currentCombo = 0;
             _lessonsRewards.clear();
-            SharedPreferences.getInstance().then((prefs) => prefs.clear());
+            // Ne PAS faire prefs.clear() — ça effacerait aussi les leçons custom !
+            SharedPreferences.getInstance().then((prefs) {
+              prefs.setInt('emile_diamonds', 0);
+              // Supprimer toutes les étoiles sans toucher à custom_lessons
+              _database.forEach((_, lessons) {
+                for (final l in lessons) {
+                  prefs.remove('${l.titre}_star_astuces');
+                  prefs.remove('${l.titre}_star_train');
+                  prefs.remove('${l.titre}_star_quiz');
+                }
+              });
+            });
           });
         },
         onLessonImported: (matiere, newLesson) {
@@ -441,7 +464,17 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedLesson = newLesson;
             _lessonsRewards[newLesson.titre] = [false, false, false];
           });
-          _saveCustomLessons();
+          _saveCustomLessons().then((_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          });
         },
         onDeleteCurrentLesson: () {
           Navigator.pop(context);
@@ -456,7 +489,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _selectedSubject = _database.keys.first;
                 _selectedLesson = _database[_selectedSubject]!.first;
               } else {
-                _database.addAll(InitialDatabase.data);
+                // Réinitialiser avec une copie indépendante (pas une référence partagée)
+                for (final e in InitialDatabase.data.entries) {
+                  _database[e.key] = List<LessonModel>.from(e.value);
+                }
                 _selectedSubject = _database.keys.first;
                 _selectedLesson = _database[_selectedSubject]!.first;
               }
@@ -493,7 +529,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const Text(
-              'v1.3.0',
+              'v1.3.1',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 10,
