@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
+import 'services/memoire_service.dart';
+import 'services/settings_service.dart';
 import 'views/launch_screen.dart';
 import 'views/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await SettingsService().load();
+  } catch (_) {}
+  try {
+    await MemoireService().charger();
+  } catch (_) {}
   runApp(const MyApp());
 }
 

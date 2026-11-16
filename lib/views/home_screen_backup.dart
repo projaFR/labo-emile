@@ -362,6 +362,8 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => ParentView(
         currentDiamonds: _totalDiamonds,
         currentLessonTitle: _selectedLesson.titre,
+        infoMemoire: () => "",
+        onResetMemoire: () async {},
         onDiamondsChanged: (amount) {
           setState(() {
             _totalDiamonds += amount;

@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
+import 'settings_service.dart';
 
 /// Service singleton de sons synthétiques.
 /// Génère des sons WAV en mémoire — aucun fichier asset, aucune connexion réseau.
@@ -75,7 +77,7 @@ class SoundService {
   }
 
   Future<void> _play(Uint8List wav) async {
-    if (!_enabled) return;
+    if (!_enabled || !SettingsService().sons) return;
     try {
       await _player.stop();
       await _player.play(BytesSource(wav));
@@ -92,13 +94,24 @@ class SoundService {
     ], volume: 0.5),
   );
 
-  /// ❌ Mauvaise réponse : note grave descendante
+  /// Mauvaise réponse : deux notes douces, courtes, à faible volume
+  /// (petit intervalle descendant, ni grave ni sec).
   Future<void> playError() => _play(
     _generateWav([
-      (293.66, 80), // Ré4
-      (220.00, 180), // La3
-    ], volume: 0.4),
+      (392.00, 110), // Sol4
+      (349.23, 190), // Fa4
+    ], volume: 0.22),
   );
+
+  /// Vibration légère de réussite (si les vibrations sont activées).
+  void hapticSuccess() {
+    if (SettingsService().vibrations) HapticFeedback.lightImpact();
+  }
+
+  /// Vibration d'erreur : un simple tic léger (plus de choc fort).
+  void hapticError() {
+    if (SettingsService().vibrations) HapticFeedback.selectionClick();
+  }
 
   /// ⭐ Étoile débloquée : trois notes festives
   Future<void> playStar() => _play(

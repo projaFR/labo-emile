@@ -3,6 +3,9 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../logic/memoire.dart';
+import '../logic/seance_logic.dart';
+import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 import '../models/lesson_model.dart';
 import '../data/database.dart';
@@ -10,6 +13,7 @@ import 'flashcards_view.dart';
 import 'exercise_view.dart';
 import 'parent_view.dart';
 import 'quiz_view.dart';
+import 'revision_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -125,10 +129,47 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     _selectedLesson = _database[_selectedSubject]!.first;
     _loadProgress();
+    MemoireService().addListener(_surMemoire);
+    MemoireService().charger();
+  }
+
+  void _surMemoire() {
+    if (mounted) setState(() {});
+  }
+
+  // ── Mémoire par question : Révision du jour et maîtrise ──────────────────
+  List<RefQuestion> get _toutesQuestions => [
+    for (final lessons in _database.values)
+      for (final l in lessons) ...questionsDeLecon(l),
+  ];
+
+  Memoire get _memoire => MemoireService().memoire;
+
+  /// Récompense fixe, une seule fois par jour (pas de diamant par question).
+  Future<int> _recompenseRevision() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = _memoire.aujourdhui;
+    if (prefs.getString('revision_diamants_jour') == today) return 0;
+    await prefs.setString('revision_diamants_jour', today);
+    if (!mounted) return 0;
+    _handleSuccess(kDiamantsRevision, combo: false);
+    return kDiamantsRevision;
+  }
+
+  void _ouvrirRevision() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RevisionView(
+          questions: _memoire.dues(_toutesQuestions),
+          onTerminee: _recompenseRevision,
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
+    MemoireService().removeListener(_surMemoire);
     _confettiController.dispose();
     SoundService().dispose();
     super.dispose();
@@ -231,16 +272,29 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// Paquet de cartes terminé : un diamant fixe, une seule fois par leçon et
+  /// par jour (rejouer le même paquet ne rapporte rien de plus).
+  Future<void> _awardDeckDiamond(String lessonTitle) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today = '${now.year}-${now.month}-${now.day}';
+    final key = 'cartes_diamant_$lessonTitle';
+    if (prefs.getString(key) == today) return;
+    await prefs.setString(key, today);
+    if (!mounted) return;
+    _handleSuccess(1, combo: false);
+  }
+
   String _getStarKey(int index) {
     if (index == 0) return "astuces";
     if (index == 1) return "train";
     return "quiz";
   }
 
-  void _handleSuccess(int gain) {
+  void _handleSuccess(int gain, {bool combo = true}) {
     final String badgeBefore = _getBadgeForDiamonds(_totalDiamonds);
     setState(() {
-      if (gain == 1) {
+      if (gain == 1 && combo) {
         _currentCombo++;
         final int finalGain = (_currentCombo >= 5) ? 3 : 1;
         _totalDiamonds += finalGain;
@@ -258,7 +312,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleFailure() {
-    setState(() => _currentCombo = 0);
+    // Une erreur fait redescendre le combo d'un cran (au lieu de zéro).
+    setState(() => _currentCombo = comboApresErreur(_currentCombo));
   }
 
   void _celebrateLevelUp(String newBadge) {
@@ -430,6 +485,12 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context) => ParentView(
         currentDiamonds: _totalDiamonds,
         currentLessonTitle: _selectedLesson.titre,
+        infoMemoire: () {
+          final refs = _toutesQuestions;
+          return "${_memoire.nombreSuiviesParmi(refs)} questions suivies, "
+              "${_memoire.nombreDues(refs)} à revoir aujourd'hui";
+        },
+        onResetMemoire: () => MemoireService().reinitialiser(),
         onDiamondsChanged: (amount) {
           setState(() {
             _totalDiamonds += amount;
@@ -769,6 +830,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              // 3 bis. RÉVISION DU JOUR + MAÎTRISE DE LA LEÇON
+              _buildRevisionBar(),
+
               // 4. ZONE DE JEU
               Expanded(child: _buildCurrentScreenContent()),
             ],
@@ -817,12 +881,92 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildRevisionBar() {
+    final int nbDues = _memoire.nombreDues(_toutesQuestions);
+    final double maitrise = _memoire.maitrise(
+      questionsDeLecon(_selectedLesson),
+    );
+    final int pct = (maitrise * 100).round();
+    return Container(
+      color: LaboPalette.paper,
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: _ouvrirRevision,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: nbDues > 0
+                      ? LaboPalette.encre
+                      : Colors.blueGrey.shade300,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      "🔁 Révision du jour",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      nbDues > 0
+                          ? "$nbDues à revoir aujourd'hui"
+                          : "Rien à revoir, bravo ! 🎉",
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 92,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "🧠 Maîtrise $pct %",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: LaboPalette.ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: maitrise,
+                    minHeight: 6,
+                    backgroundColor: LaboPalette.line,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      pct >= 80 ? LaboPalette.good : LaboPalette.encre,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCurrentScreenContent() {
     switch (_currentIndex) {
       case 0:
         return FlashcardsView(
           lesson: _selectedLesson,
-          onDiamondEarned: () => _handleSuccess(1),
+          onDiamondEarned: () => _awardDeckDiamond(_selectedLesson.titre),
           onLessonCompleted: () => _unlockLessonStar(_selectedLesson.titre, 0),
         );
       case 1:

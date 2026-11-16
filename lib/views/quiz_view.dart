@@ -2,8 +2,11 @@ import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme.dart';
-import 'package:flutter/services.dart';
+import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
+import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 
 class QuizView extends StatefulWidget {
@@ -12,12 +15,17 @@ class QuizView extends StatefulWidget {
   final VoidCallback onFailure;
   final VoidCallback onPerfectQuiz;
 
+  /// Mode « Révision du jour » : une seule question, sans chrono ni
+  /// diamants ; appelée quand on touche « SUIVANT ».
+  final VoidCallback? surFin;
+
   const QuizView({
     super.key,
     required this.lesson,
     required this.onSuccess,
     required this.onFailure,
     required this.onPerfectQuiz,
+    this.surFin,
   });
 
   @override
@@ -26,14 +34,15 @@ class QuizView extends StatefulWidget {
 
 class _QuizViewState extends State<QuizView> {
   int _currentIndex = 0;
-  int _timeLeft = 15;
+  int _timeLeft = 30;
+  int _limit = 30; // temps par question (0 = sans chrono), réglé par le parent
+  bool _timedOut = false;
+  late MancheQuiz _manche;
   Timer? _timer;
   bool _isSubmitted = false;
   int _selectedOptionIndex = -1;
   int _score = 0;
-
-  int _correctAnswers = 0;
-  int _pendingDiamonds = 0;
+  int _lastGain = 0;
 
   // ✅ Ordre aléatoire des questions et des options
   List<QuizModel> _shuffledQuiz = [];
@@ -41,6 +50,8 @@ class _QuizViewState extends State<QuizView> {
   @override
   void initState() {
     super.initState();
+    _limit = widget.surFin != null ? 0 : SettingsService().chronoSecondes;
+    _manche = MancheQuiz(_limit);
     _shuffleQuiz();
     _startQuestion();
   }
@@ -72,14 +83,16 @@ class _QuizViewState extends State<QuizView> {
   }
 
   void _startQuestion() {
-    _timeLeft = 15;
+    _timeLeft = _limit;
     _isSubmitted = false;
+    _timedOut = false;
+    _lastGain = 0;
     _selectedOptionIndex = -1;
-    _startTimer();
+    _timer?.cancel();
+    if (_limit > 0) _startTimer();
   }
 
   void _startTimer() {
-    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_timeLeft > 0) {
         setState(() => _timeLeft--);
@@ -90,12 +103,14 @@ class _QuizViewState extends State<QuizView> {
     });
   }
 
+  /// Temps écoulé : ce n'est PAS une faute. On montre la bonne réponse
+  /// (en douceur) et on passe à la suite, sans toucher au combo.
   void _timeOver() {
+    _noter(Resultat.deuxiemeEssai);
     setState(() {
       _isSubmitted = true;
-      SoundService().playError();
-      HapticFeedback.heavyImpact();
-      widget.onFailure();
+      _timedOut = true;
+      _manche.tempsEcoule();
     });
   }
 
@@ -104,39 +119,52 @@ class _QuizViewState extends State<QuizView> {
     _timer?.cancel();
 
     final bool isCorrect = (index == currentQuiz.indexCorrect);
+    _noter(isCorrect ? Resultat.premierCoup : Resultat.rate);
 
     setState(() {
       _selectedOptionIndex = index;
       _isSubmitted = true;
       if (isCorrect) {
         SoundService().playSuccess();
-        HapticFeedback.lightImpact();
+        SoundService().hapticSuccess();
         _score++;
-        _correctAnswers++;
-        _pendingDiamonds += (_timeLeft > 10) ? 2 : 1;
+        // Les diamants sont versés tout de suite : rien n'est perdu si on
+        // quitte le défi en cours de route.
+        _lastGain = _manche.repondreJuste(_timeLeft);
+        widget.onSuccess(_lastGain);
       } else {
         SoundService().playError();
-        HapticFeedback.heavyImpact();
+        SoundService().hapticError();
+        _manche.repondreFaux();
         widget.onFailure();
       }
     });
   }
 
+  /// Mémoire par question : la question affichée est celle de la liste mélangée.
+  void _noter(Resultat r) {
+    MemoireService().enregistrer(
+      cleQuestion(
+        widget.lesson.titre,
+        TypeQuestion.quiz,
+        _shuffledQuiz[_currentIndex].question,
+      ),
+      r,
+    );
+  }
+
   void _nextQuestion() {
+    if (widget.surFin != null) {
+      widget.surFin!();
+      return;
+    }
     setState(() {
       _currentIndex++;
       if (_currentIndex < _shuffledQuiz.length) {
         _startQuestion();
-      } else {
-        // ✅ FIX : C'est ici, à la fin, qu'on crédite TOUT d'un coup.
-        //          Les diamants et l'étoile sont toujours cohérents.
-        if (_pendingDiamonds > 0) {
-          widget.onSuccess(_pendingDiamonds);
-        }
-        if (_correctAnswers == _shuffledQuiz.length) {
-          SoundService().playPerfect();
-          widget.onPerfectQuiz();
-        }
+      } else if (_manche.etoile(_shuffledQuiz.length)) {
+        SoundService().playPerfect();
+        widget.onPerfectQuiz();
       }
     });
   }
@@ -145,8 +173,8 @@ class _QuizViewState extends State<QuizView> {
     setState(() {
       _currentIndex = 0;
       _score = 0;
-      _correctAnswers = 0;
-      _pendingDiamonds = 0;
+      _limit = SettingsService().chronoSecondes;
+      _manche = MancheQuiz(_limit);
       _shuffleQuiz();
       _startQuestion();
     });
@@ -186,8 +214,8 @@ class _QuizViewState extends State<QuizView> {
               const SizedBox(height: 8),
               Text(
                 _score == _shuffledQuiz.length
-                    ? "👑 Course parfaite contre la montre ! Étoile obtenue ! (+5 💎)"
-                    : "Tu as fait des erreurs. Réessaie à toute vitesse pour l'étoile !",
+                    ? "👑 Parcours parfait ! Étoile obtenue ! (+5 💎)"
+                    : "Pas encore parfait. Réessaie pour l'étoile, tu progresses !",
               ),
               const SizedBox(height: 20),
               ElevatedButton(
@@ -221,6 +249,7 @@ class _QuizViewState extends State<QuizView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
+                  if (widget.surFin == null)
                   Text(
                     "Question ${_currentIndex + 1} / ${_shuffledQuiz.length}",
                     style: const TextStyle(
@@ -228,10 +257,11 @@ class _QuizViewState extends State<QuizView> {
                       color: LaboPalette.muted,
                     ),
                   ),
+                  if (_limit > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _timeLeft <= 5 ? LaboPalette.rouge : LaboPalette.warn,
+                      color: LaboPalette.warn,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -273,8 +303,8 @@ class _QuizViewState extends State<QuizView> {
                     btnColor = Colors.green.shade100;
                     textColor = Colors.green.shade900;
                   } else if (isThisSelected) {
-                    btnColor = Colors.red.shade100;
-                    textColor = Colors.red.shade900;
+                    btnColor = Colors.amber.shade100;
+                    textColor = Colors.brown.shade900;
                   }
                 }
 
@@ -311,31 +341,35 @@ class _QuizViewState extends State<QuizView> {
                 );
               }),
               if (_isSubmitted) ...[
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: _selectedOptionIndex == currentQuiz.indexCorrect
-                        ? Colors.green.shade50
-                        : Colors.red.shade50,
-                    borderRadius: LaboShape.button,
-                  ),
-                  child: Text(
-                    _selectedOptionIndex == currentQuiz.indexCorrect
-                        ? (_timeLeft > 10
-                              ? "⚡ BONUS RAPIDITÉ ACTIVÉ ! Double Diamant ! (+2 💎)"
-                              : "✅ Bonne réponse ! (+1 💎)")
-                        : "❌ Ce n'est pas la bonne réponse.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: _selectedOptionIndex == currentQuiz.indexCorrect
-                          ? Colors.green.shade800
-                          : Colors.red.shade800,
-                      fontSize: 13,
+                Builder(builder: (context) {
+                  final bool ok = _selectedOptionIndex == currentQuiz.indexCorrect;
+                  final String msg = ok
+                      ? (widget.surFin != null
+                            ? "✅ Bonne réponse !"
+                            : _lastGain >= 2
+                            ? "⚡ Bonus rapidité ! (+2 💎)"
+                            : "✅ Bonne réponse ! (+1 💎)")
+                      : _timedOut
+                      ? "⏳ Temps écoulé, pas grave ! La bonne réponse est en vert."
+                      : "Ce n'est pas ça. La bonne réponse est en vert.";
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: ok ? Colors.green.shade50 : Colors.amber.shade50,
+                      borderRadius: LaboShape.button,
                     ),
-                  ),
-                ),
+                    child: Text(
+                      msg,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: ok ? Colors.green.shade800 : Colors.brown.shade800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  );
+                }),
                 SizedBox(
                   width: double.infinity,
                   height: 44,

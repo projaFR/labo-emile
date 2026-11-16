@@ -1,8 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
-import 'package:flutter/services.dart';
+import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
 class ExerciseView extends StatefulWidget {
@@ -11,12 +14,18 @@ class ExerciseView extends StatefulWidget {
   final VoidCallback onFailure;
   final VoidCallback onPerfectScore;
 
+  /// Mode « Révision du jour » : la leçon ne contient que l'exercice à
+  /// réviser ; pas de séance ni d'étoile, et cette fonction est appelée
+  /// quand on touche « SUIVANT ».
+  final VoidCallback? surFin;
+
   const ExerciseView({
     super.key,
     required this.lesson,
     required this.onSuccess,
     required this.onFailure,
     required this.onPerfectScore,
+    this.surFin,
   });
 
   @override
@@ -25,12 +34,19 @@ class ExerciseView extends StatefulWidget {
 
 class _ExerciseViewState extends State<ExerciseView> {
   int _currentIndex = 0;
-  bool _isSubmitted = false;
+  bool _isSubmitted = false; // l'exercice est terminé (juste ou réponse montrée)
   bool _isCorrect = false;
-  int _errorsInThisSeries = 0;
+  int _attempt = 1; // 1er ou 2e essai
+  bool _showHint = false; // indice affiché (après une 1re erreur)
+  int _failedFinal = 0; // exercices finis « réponse montrée » dans la séance
 
-  // ── Ordre aléatoire des exercices ─────────────────────────────────────────
-  List<int> _shuffledIndices = [];
+  // ── Séance : indices (dans la leçon) des exercices tirés ──────────────────
+  List<int> _sessionIndices = [];
+  Set<int> _vus = {};
+  bool _loading = true;
+  bool _hasRemaining = false;
+
+  String get _prefsKey => 'seance_vus_${widget.lesson.titre}';
 
   // ── Options QCM mélangées pour la question courante ───────────────────────
   List<String> _shuffledOptions = [];
@@ -45,31 +61,21 @@ class _ExerciseViewState extends State<ExerciseView> {
 
   static const String _hole = '[?]';
 
-  // ── Exercice courant (via indice mélangé) ─────────────────────────────────
-  ExerciseModel get _currentExercise {
-    final idx = _currentIndex < _shuffledIndices.length
-        ? _shuffledIndices[_currentIndex]
-        : _currentIndex;
-    return widget.lesson.exercices[idx];
-  }
+  // ── Exercice courant (via les indices de la séance) ───────────────────────
+  ExerciseModel get _currentExercise =>
+      widget.lesson.exercices[_sessionIndices[_currentIndex]];
 
   @override
   void initState() {
     super.initState();
-    _shuffleExercises();
-    _initCurrentExercise();
+    _startSession();
   }
 
   @override
   void didUpdateWidget(covariant ExerciseView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.lesson != widget.lesson) {
-      setState(() {
-        _currentIndex = 0;
-        _errorsInThisSeries = 0;
-        _shuffleExercises();
-        _initCurrentExercise();
-      });
+      _startSession();
     }
   }
 
@@ -79,9 +85,52 @@ class _ExerciseViewState extends State<ExerciseView> {
     super.dispose();
   }
 
-  void _shuffleExercises() {
-    _shuffledIndices = List.generate(widget.lesson.exercices.length, (i) => i)
-      ..shuffle(Random());
+  /// Tire une nouvelle séance de 10 exercices (en tenant compte de ceux déjà
+  /// vus lors des séances précédentes de cette leçon).
+  Future<void> _startSession() async {
+    final lesson = widget.lesson;
+    if (widget.surFin != null) {
+      // Révision du jour : on ne touche pas aux séances (seance_vus_*).
+      // (Appelé depuis initState ou didUpdateWidget : pas de setState.)
+      _sessionIndices = List<int>.generate(lesson.exercices.length, (i) => i);
+      _vus = {};
+      _currentIndex = 0;
+      _failedFinal = 0;
+      _hasRemaining = false;
+      _initCurrentExercise();
+      _loading = false;
+      return;
+    }
+    if (mounted && !_loading) setState(() => _loading = true);
+    Set<int> vus = {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      vus = (prefs.getStringList(_prefsKey) ?? [])
+          .map(int.tryParse)
+          .whereType<int>()
+          .toSet();
+    } catch (_) {}
+    if (!mounted || lesson != widget.lesson) return;
+    final tirage = tirerSeance(lesson.exercices.length, vus);
+    setState(() {
+      _sessionIndices = tirage.indices;
+      _vus = tirage.vusApres;
+      _currentIndex = 0;
+      _failedFinal = 0;
+      _hasRemaining = _vus.length < lesson.exercices.length;
+      _initCurrentExercise();
+      _loading = false;
+    });
+  }
+
+  Future<void> _saveSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _prefsKey,
+        _vus.map((i) => i.toString()).toList(),
+      );
+    } catch (_) {}
   }
 
   void _disposeInputs() {
@@ -99,10 +148,13 @@ class _ExerciseViewState extends State<ExerciseView> {
     _disposeInputs();
     _isSubmitted = false;
     _isCorrect = false;
+    _attempt = 1;
+    _showHint = false;
     _activeSlot = 0;
 
-    final exercises = widget.lesson.exercices;
-    if (exercises.isEmpty || _currentIndex >= exercises.length) return;
+    if (_sessionIndices.isEmpty || _currentIndex >= _sessionIndices.length) {
+      return;
+    }
 
     final currentEx = _currentExercise;
     final int nbTrous = currentEx.question.split(_hole).length - 1;
@@ -134,15 +186,6 @@ class _ExerciseViewState extends State<ExerciseView> {
     }
   }
 
-  void _resetExercise() {
-    setState(() {
-      _currentIndex = 0;
-      _errorsInThisSeries = 0;
-      _shuffleExercises();
-      _initCurrentExercise();
-    });
-  }
-
   // ── Validation trous numériques ────────────────────────────────────────────
   void _validateNumericAnswers(ExerciseModel currentEx) {
     if (_isSubmitted) return;
@@ -164,20 +207,7 @@ class _ExerciseViewState extends State<ExerciseView> {
           _controllers[0].text.trim() == currentEx.reponseAttendue.trim();
     }
 
-    setState(() {
-      _isSubmitted = true;
-      _isCorrect = allGood;
-      if (_isCorrect) {
-        SoundService().playSuccess();
-        HapticFeedback.lightImpact();
-        widget.onSuccess();
-      } else {
-        SoundService().playError();
-        HapticFeedback.heavyImpact();
-        _errorsInThisSeries++;
-        widget.onFailure();
-      }
-    });
+    _appliquerResultat(allGood);
   }
 
   // ── Sélection d'une case QCM ───────────────────────────────────────────────
@@ -217,29 +247,75 @@ class _ExerciseViewState extends State<ExerciseView> {
       }
     }
 
+    _appliquerResultat(allGood);
+  }
+
+  /// Applique le résultat d'un essai : juste, 2e essai avec indice, ou
+  /// bonne réponse montrée.
+  void _appliquerResultat(bool estJuste) {
+    final res = resoudreEssai(estJuste: estJuste, essai: _attempt);
+    // Mémoire par question : on note le résultat final (juste ou montrée).
+    if (res != ResultatEssai.reessayer) {
+      MemoireService().enregistrer(
+        cleQuestion(
+          widget.lesson.titre,
+          TypeQuestion.exercice,
+          _currentExercise.question,
+        ),
+        res == ResultatEssai.montrerReponse
+            ? Resultat.rate
+            : (_attempt == 1 ? Resultat.premierCoup : Resultat.deuxiemeEssai),
+      );
+    }
     setState(() {
-      _isSubmitted = true;
-      _isCorrect = allGood;
-      if (_isCorrect) {
-        SoundService().playSuccess();
-        HapticFeedback.lightImpact();
-        widget.onSuccess();
-      } else {
-        SoundService().playError();
-        HapticFeedback.heavyImpact();
-        _errorsInThisSeries++;
-        widget.onFailure();
+      switch (res) {
+        case ResultatEssai.juste:
+          _isSubmitted = true;
+          _isCorrect = true;
+          SoundService().playSuccess();
+          SoundService().hapticSuccess();
+          widget.onSuccess();
+          break;
+        case ResultatEssai.reessayer:
+          // Indice, puis on vide les cases pour un 2e essai.
+          SoundService().playError();
+          SoundService().hapticError();
+          widget.onFailure(); // le combo descend d'un cran
+          _attempt = 2;
+          _showHint = true;
+          for (final c in _controllers) {
+            c.clear();
+          }
+          _selectedOptions = List.filled(_selectedOptions.length, '');
+          _activeSlot = 0;
+          break;
+        case ResultatEssai.montrerReponse:
+          _isSubmitted = true;
+          _isCorrect = false;
+          _failedFinal++;
+          SoundService().playError();
+          SoundService().hapticError();
+          break;
       }
     });
   }
 
   void _nextQuestion() {
+    if (widget.surFin != null) {
+      widget.surFin!();
+      return;
+    }
     setState(() {
       _currentIndex++;
-      if (_currentIndex < widget.lesson.exercices.length) {
+      if (_currentIndex < _sessionIndices.length) {
         _initCurrentExercise();
-      } else if (_errorsInThisSeries == 0) {
-        widget.onPerfectScore();
+      } else {
+        // Fin de séance : on retient les exercices vus, et l'étoile est
+        // donnée si tout est juste (au besoin au 2e essai).
+        _saveSeen();
+        if (etoileExercices(_failedFinal)) {
+          widget.onPerfectScore();
+        }
       }
     });
   }
@@ -407,6 +483,20 @@ class _ExerciseViewState extends State<ExerciseView> {
     );
   }
 
+  Widget _infoBox(String text, Color bg, Color fg) => Container(
+    margin: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: TextStyle(color: fg, fontWeight: FontWeight.bold),
+    ),
+  );
+
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -414,25 +504,46 @@ class _ExerciseViewState extends State<ExerciseView> {
       return const Center(child: Text("📝 Pas d'exercices."));
     }
 
-    if (_currentIndex >= widget.lesson.exercices.length) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_currentIndex >= _sessionIndices.length) {
+      final bool etoile = etoileExercices(_failedFinal);
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              '🏆 Série terminée !',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: LaboPalette.encre,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                '🏆 Séance terminée !',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: LaboPalette.encre,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _resetExercise,
-              child: const Text('Recommencer'),
-            ),
-          ],
+              const SizedBox(height: 10),
+              Text(
+                etoile
+                    ? 'Tout est juste, bravo !'
+                    : 'Bien joué ! Tu as fini ta séance. '
+                          'Les réponses montrées reviendront bientôt.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15, color: Colors.black54),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _startSession,
+                child: Text(
+                  _hasRemaining
+                      ? 'Séance suivante (nouveaux exercices)'
+                      : 'Refaire une séance',
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -463,8 +574,9 @@ class _ExerciseViewState extends State<ExerciseView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.surFin == null)
               Text(
-                'Exercice ${_currentIndex + 1} / ${widget.lesson.exercices.length}',
+                'Exercice ${_currentIndex + 1} / ${_sessionIndices.length}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: LaboPalette.muted,
@@ -472,7 +584,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: outerPad * 0.67),
+              if (widget.surFin == null) SizedBox(height: outerPad * 0.67),
               Card(
                 color: LaboPalette.paper,
                 shape: RoundedRectangleBorder(
@@ -570,27 +682,26 @@ class _ExerciseViewState extends State<ExerciseView> {
                               );
                             }),
 
-                          if (_isSubmitted)
-                            Container(
-                              margin: const EdgeInsets.only(top: 10),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: _isCorrect
-                                    ? Colors.green.shade50
-                                    : Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                _isCorrect
-                                    ? 'Bravo ! 🎉'
-                                    : 'Aide : ${currentEx.astuceErreur}',
-                                style: TextStyle(
-                                  color: _isCorrect
-                                      ? Colors.green.shade900
-                                      : Colors.red.shade900,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                          if (_showHint && !_isSubmitted)
+                            _infoBox(
+                              '💡 Indice : ${currentEx.astuceErreur.trim().isEmpty ? "Relis bien la question, tu as un 2e essai." : currentEx.astuceErreur}',
+                              Colors.blue.shade50,
+                              Colors.blue.shade900,
+                            ),
+                          if (_isSubmitted && _isCorrect)
+                            _infoBox(
+                              _attempt == 2
+                                  ? 'Bravo, tu as trouvé ! 🎉'
+                                  : 'Bravo ! 🎉',
+                              Colors.green.shade50,
+                              Colors.green.shade900,
+                            ),
+                          if (_isSubmitted && !_isCorrect)
+                            _infoBox(
+                              'La bonne réponse : ${texteBonneReponse(currentEx)}'
+                              '${currentEx.astuceErreur.trim().isEmpty ? "" : "\n💡 ${currentEx.astuceErreur}"}',
+                              Colors.amber.shade50,
+                              Colors.brown.shade800,
                             ),
                         ],
                       ),

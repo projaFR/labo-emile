@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/lesson_model.dart';
+import '../services/settings_service.dart';
 
 class ParentView extends StatefulWidget {
   final int currentDiamonds;
@@ -14,6 +15,12 @@ class ParentView extends StatefulWidget {
   final VoidCallback onDeleteCurrentLesson;
   final String currentLessonTitle;
 
+  /// Texte d'information sur la mémoire par question.
+  final String Function() infoMemoire;
+
+  /// Efface la mémoire par question (jamais les diamants ni les leçons).
+  final Future<void> Function() onResetMemoire;
+
   const ParentView({
     super.key,
     required this.currentDiamonds,
@@ -22,6 +29,8 @@ class ParentView extends StatefulWidget {
     required this.onLessonImported,
     required this.onDeleteCurrentLesson,
     required this.currentLessonTitle,
+    required this.infoMemoire,
+    required this.onResetMemoire,
   });
 
   @override
@@ -100,6 +109,38 @@ class _ParentViewState extends State<ParentView> {
         );
       },
     );
+  }
+
+  Future<void> _confirmerResetMemoire() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("🧠 Réinitialiser la mémoire ?"),
+        content: const Text(
+          "Le Labo oubliera quelles questions Émile a réussies ou ratées "
+          "(la Révision du jour repart de zéro).\n\n"
+          "Les diamants, les étoiles et les leçons ne changent pas.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("ANNULER", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text(
+              "RÉINITIALISER",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await widget.onResetMemoire();
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> _openClaude() async {
@@ -373,6 +414,73 @@ class _ParentViewState extends State<ParentView> {
                     backgroundColor: Colors.redAccent,
                   ),
                 ),
+              ],
+            ),
+            const Divider(height: 30),
+            const Text(
+              "🧠 Mémoire d'Émile",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(widget.infoMemoire(), style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _confirmerResetMemoire,
+                icon: const Icon(Icons.psychology_alt, color: LaboPalette.rouge),
+                label: const Text(
+                  "Réinitialiser la mémoire",
+                  style: TextStyle(color: LaboPalette.rouge),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: LaboPalette.rouge),
+                ),
+              ),
+            ),
+            const Divider(height: 30),
+            const Text(
+              "🎚️ Réglages d'Émile",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("🔊 Sons"),
+              value: SettingsService().sons,
+              onChanged: (v) async {
+                await SettingsService().setSons(v);
+                setState(() {});
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("📳 Vibrations"),
+              value: SettingsService().vibrations,
+              onChanged: (v) async {
+                await SettingsService().setVibrations(v);
+                setState(() {});
+              },
+            ),
+            const Text("⏳ Temps par question du Défi Chrono"),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final s in SettingsService.chronoPermis)
+                  ChoiceChip(
+                    label: Text(s == 0 ? "Sans chrono" : "$s s"),
+                    selected: SettingsService().chronoSecondes == s,
+                    onSelected: (_) async {
+                      await SettingsService().setChrono(s);
+                      setState(() {});
+                    },
+                  ),
               ],
             ),
             const Divider(height: 30),

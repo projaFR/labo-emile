@@ -1,8 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme.dart';
-import 'package:flutter/services.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
 class FlashcardsView extends StatefulWidget {
@@ -10,11 +11,16 @@ class FlashcardsView extends StatefulWidget {
   final VoidCallback onDiamondEarned;
   final VoidCallback onLessonCompleted;
 
+  /// Mode « Révision du jour » : une seule carte, sans diamant ni étoile ;
+  /// appelée dès que la carte est notée.
+  final VoidCallback? surFin;
+
   const FlashcardsView({
     super.key,
     required this.lesson,
     required this.onDiamondEarned,
     required this.onLessonCompleted,
+    this.surFin,
   });
 
   @override
@@ -24,6 +30,7 @@ class FlashcardsView extends StatefulWidget {
 class _FlashcardsViewState extends State<FlashcardsView> {
   List<FlashcardModel> deck = [];
   bool showAnswer = false;
+  bool _aRevoir = false; // au moins une carte notée « à revoir » dans ce tour
 
   @override
   void initState() {
@@ -44,28 +51,49 @@ class _FlashcardsViewState extends State<FlashcardsView> {
       // ✅ Ordre aléatoire à chaque chargement du paquet
       deck = List<FlashcardModel>.from(widget.lesson.astuces)..shuffle();
       showAnswer = false;
+      _aRevoir = false;
     });
   }
 
   void handleResult(bool success) {
     if (deck.isEmpty) return;
+    // Mémoire par question : « Maîtrisé » = bonne réponse du 1er coup,
+    // « À revoir » = à refaire demain.
+    MemoireService().enregistrer(
+      cleQuestion(widget.lesson.titre, TypeQuestion.astuce, deck[0].question),
+      success ? Resultat.premierCoup : Resultat.rate,
+    );
+    if (widget.surFin != null) {
+      if (success) {
+        SoundService().playSuccess();
+        SoundService().hapticSuccess();
+      }
+      widget.surFin!();
+      return;
+    }
     setState(() {
       if (!success) {
-        SoundService().playError();
-        HapticFeedback.heavyImpact();
+        // « À revoir » n'est pas une faute : pas de son d'erreur.
+        _aRevoir = true;
+        SoundService().hapticSuccess();
         final failedCard = deck.removeAt(0);
         deck.add(failedCard);
       } else {
+        // « Maîtrisé » est une auto-note : plus de diamant par carte.
         SoundService().playSuccess();
-        HapticFeedback.lightImpact();
+        SoundService().hapticSuccess();
         deck.removeAt(0);
-        widget.onDiamondEarned();
       }
       showAnswer = false;
 
       if (deck.isEmpty) {
-        SoundService().playStar();
-        widget.onLessonCompleted();
+        // Paquet terminé : un diamant fixe, et l'étoile seulement si aucune
+        // carte n'a été notée « à revoir » (comme le dit le README).
+        widget.onDiamondEarned();
+        if (!_aRevoir) {
+          SoundService().playStar();
+          widget.onLessonCompleted();
+        }
       }
     });
   }
@@ -137,14 +165,27 @@ class _FlashcardsViewState extends State<FlashcardsView> {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: SingleChildScrollView(
-                  child: Text(
-                    !isBack ? card.question : card.reponse,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: !isBack ? 24 : 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        !isBack ? card.question : card.reponse,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: !isBack ? 24 : 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      if (!isBack) ...[
+                        const SizedBox(height: 14),
+                        const Text(
+                          "🤔 Dis la réponse dans ta tête\navant de retourner la carte",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13, color: LaboPalette.muted),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
@@ -190,9 +231,9 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                       Expanded(
                         child: InkWell(
                           onTap: () => handleResult(true),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              "MAÎTRISÉ ✅",
+                              widget.surFin != null ? "JE SAVAIS ✅" : "MAÎTRISÉ ✅",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: LaboPalette.good,
@@ -228,10 +269,12 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                "Tu as lu toutes les astuces !\n⭐ Étoile Débloquée ! (+5 💎)",
+              Text(
+                _aRevoir
+                    ? "Paquet terminé ! (+1 💎)\nRefais-le sans « À revoir » pour gagner l'étoile ⭐"
+                    : "Paquet terminé sans « À revoir » !\n⭐ Étoile et +1 💎",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: Colors.black54),
+                style: const TextStyle(fontSize: 15, color: Colors.black54),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
@@ -252,6 +295,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            if (widget.surFin == null)
             Text(
               "Cartes restantes : ${deck.length}",
               style: const TextStyle(
@@ -260,7 +304,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                 color: LaboPalette.muted,
               ),
             ),
-            const SizedBox(height: 10),
+            if (widget.surFin == null) const SizedBox(height: 10),
             Expanded(
               child: Stack(
                 alignment: Alignment.center,
