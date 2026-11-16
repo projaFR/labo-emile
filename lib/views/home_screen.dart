@@ -3,6 +3,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../logic/seance_logic.dart';
 import '../services/sound_service.dart';
 import '../models/lesson_model.dart';
 import '../data/database.dart';
@@ -231,16 +232,29 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// Paquet de cartes terminé : un diamant fixe, une seule fois par leçon et
+  /// par jour (rejouer le même paquet ne rapporte rien de plus).
+  Future<void> _awardDeckDiamond(String lessonTitle) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today = '${now.year}-${now.month}-${now.day}';
+    final key = 'cartes_diamant_$lessonTitle';
+    if (prefs.getString(key) == today) return;
+    await prefs.setString(key, today);
+    if (!mounted) return;
+    _handleSuccess(1, combo: false);
+  }
+
   String _getStarKey(int index) {
     if (index == 0) return "astuces";
     if (index == 1) return "train";
     return "quiz";
   }
 
-  void _handleSuccess(int gain) {
+  void _handleSuccess(int gain, {bool combo = true}) {
     final String badgeBefore = _getBadgeForDiamonds(_totalDiamonds);
     setState(() {
-      if (gain == 1) {
+      if (gain == 1 && combo) {
         _currentCombo++;
         final int finalGain = (_currentCombo >= 5) ? 3 : 1;
         _totalDiamonds += finalGain;
@@ -258,7 +272,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleFailure() {
-    setState(() => _currentCombo = 0);
+    // Une erreur fait redescendre le combo d'un cran (au lieu de zéro).
+    setState(() => _currentCombo = comboApresErreur(_currentCombo));
   }
 
   void _celebrateLevelUp(String newBadge) {
@@ -822,7 +837,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 0:
         return FlashcardsView(
           lesson: _selectedLesson,
-          onDiamondEarned: () => _handleSuccess(1),
+          onDiamondEarned: () => _awardDeckDiamond(_selectedLesson.titre),
           onLessonCompleted: () => _unlockLessonStar(_selectedLesson.titre, 0),
         );
       case 1:

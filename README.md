@@ -7,14 +7,14 @@ Application mobile éducative Flutter pour enfants, conçue pour apprendre en s'
 ## 📱 Fonctionnalités
 
 ### 3 modules d'apprentissage
-- **🃏 Astuces** — Flashcards avec retournement animé (système Leitner : les cartes ratées reviennent)
-- **🎯 Entraînement** — Exercices à trous et QCM avec cases interactives
-- **⏱️ Défi Chrono** — Quiz contre la montre avec bonus de rapidité
+- **🃏 Astuces** — Flashcards avec retournement animé (« dis-la dans ta tête » avant de retourner ; les cartes « À revoir » reviennent dans le tour)
+- **🎯 Entraînement** — Séances de 10 exercices tirés de la leçon (à trous et QCM) ; 2 essais avec indice, puis la bonne réponse est montrée
+- **⏱️ Défi Chrono** — Quiz avec temps réglable (sans / 15 s / 30 s, 30 s par défaut) ; le temps écoulé n'est pas une faute
 
 ### Système de récompenses
-- **💎 Diamants** gagnés à chaque bonne réponse
-- **🔥 Combo** : x3 diamants après 5 bonnes réponses consécutives
-- **⭐ Étoiles** par leçon (une par module complété sans erreur)
+- **💎 Diamants** gagnés à chaque bonne réponse (exercices, quiz) ; 1 diamant par paquet de cartes fini (une fois par jour), rien pour « Maîtrisé »
+- **🔥 Combo** : x3 diamants après 5 bonnes réponses consécutives ; une erreur fait redescendre le combo d'un cran
+- **⭐ Étoiles** par leçon (Astuces : paquet fini sans « À revoir » ; Entraînement : séance toute juste, au besoin au 2e essai ; Chrono : tout juste)
 - **🎊 Confettis** à chaque étoile débloquée
 - **100 niveaux RPG** avec 10 titres qui changent tous les 10 niveaux :
   - Nv.1-10 : 🥚 Oeuf Mystérieux
@@ -36,6 +36,7 @@ Application mobile éducative Flutter pour enfants, conçue pour apprendre en s'
 ### Espace Parent (protégé par PIN)
 - Injection de leçons via JSON généré par Gemini
 - Ajout/remise à zéro des diamants
+- Réglages : sons, vibrations, temps du Défi Chrono
 - Suppression de leçons
 - Changement du code PIN
 

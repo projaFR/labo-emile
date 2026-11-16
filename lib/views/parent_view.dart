@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/lesson_model.dart';
+import '../services/settings_service.dart';
 
 class ParentView extends StatefulWidget {
   final int currentDiamonds;
@@ -373,6 +374,48 @@ class _ParentViewState extends State<ParentView> {
                     backgroundColor: Colors.redAccent,
                   ),
                 ),
+              ],
+            ),
+            const Divider(height: 30),
+            const Text(
+              "🎚️ Réglages d'Émile",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("🔊 Sons"),
+              value: SettingsService().sons,
+              onChanged: (v) async {
+                await SettingsService().setSons(v);
+                setState(() {});
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("📳 Vibrations"),
+              value: SettingsService().vibrations,
+              onChanged: (v) async {
+                await SettingsService().setVibrations(v);
+                setState(() {});
+              },
+            ),
+            const Text("⏳ Temps par question du Défi Chrono"),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final s in SettingsService.chronoPermis)
+                  ChoiceChip(
+                    label: Text(s == 0 ? "Sans chrono" : "$s s"),
+                    selected: SettingsService().chronoSecondes == s,
+                    onSelected: (_) async {
+                      await SettingsService().setChrono(s);
+                      setState(() {});
+                    },
+                  ),
               ],
             ),
             const Divider(height: 30),
