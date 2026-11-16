@@ -1,10 +1,18 @@
-# 🔬 Labo d'Émile
+# 🔬 Labo d'Émile — version 2.0.0
 
-Application mobile éducative Flutter pour enfants, conçue pour apprendre en s'amusant grâce à un système de leçons injectées par l'IA.
+Application éducative Flutter (vraie appli Android `fr.thibaut.laboemile`, et PWA web) pour enfants, conçue pour apprendre en s'amusant grâce à un système de leçons injectées par l'IA.
 
 ---
 
 ## 📱 Fonctionnalités
+
+### Nouveautés de la version 2.0
+- **🌙 Leçon du soir** : l'onglet « Aujourd'hui » propose la leçon à faire et un bouton « Commencer / Continuer »
+- **🧭 Parcours guidé** : Astuces, puis Entraînement, puis Défi Chrono, avec un récapitulatif et des étoiles à la fin
+- **🧠 Mémoire par question et Révision du jour** : chaque question revient au bon moment (boîtes de révision) ; « Réviser quand même » reprend les plus faibles
+- **🏆 Trophées** : niveau, diamants, combo, étoiles et progression
+- **🌿 Séances douces** : les exercices déjà vus passent après les nouveaux, sans pression
+- **💾 Sauvegarde / restauration** de la progression (Espace Parent)
 
 ### 3 modules d'apprentissage
 - **🃏 Astuces** — Flashcards avec retournement animé (« dis-la dans ta tête » avant de retourner ; les cartes « À revoir » reviennent dans le tour)
@@ -39,6 +47,7 @@ Application mobile éducative Flutter pour enfants, conçue pour apprendre en s'
 - Réglages : sons, vibrations, temps du Défi Chrono
 - Suppression de leçons
 - Changement du code PIN
+- **Copier la sauvegarde** / **Restaurer une sauvegarde** (voir plus bas)
 
 ### Launch screen
 - Écran d'accueil animé avec étoiles flottantes et logo 🔬
@@ -139,10 +148,23 @@ flutter run -d web-server --web-port 8080  # Web
 flutter run -d emulator-5554               # Émulateur Android
 ```
 
-### Générer un APK
+### Compiler l'APK Android (version 2.0)
 ```bash
-flutter build apk --debug
-# APK disponible dans : build/app/outputs/flutter-apk/app-debug.apk
+flutter build apk --release
+# APK : build/app/outputs/flutter-apk/app-release.apk
+# (copie conseillée : dist/labo-emile-2.0.0.apk)
+```
+L'appli est signée avec la clé de debug de l'ordinateur (comme Réviser) : toujours compiler sur le **même ordinateur** pour que les mises à jour s'installent par-dessus. Le workflow GitHub « Build APK » est en lancement manuel seulement (sa clé change à chaque fois : inutilisable pour les mises à jour).
+
+### Installer l'APK en USB
+1. Sur le téléphone : Paramètres, À propos, appuyer 7 fois sur « Numéro de build », puis activer « Débogage USB » dans les options pour les développeurs.
+2. Brancher le téléphone, accepter l'autorisation sur l'écran.
+3. `adb install -r dist/labo-emile-2.0.0.apk` (ou copier le fichier sur le téléphone et l'ouvrir pour l'installer).
+4. La 2.0 s'installe **à côté** de l'ancienne appli (identifiant différent) et ne reprend rien toute seule : voir « Sauvegarde ».
+
+### Version web (PWA)
+```bash
+flutter build web --release --base-href "/labo-emile/"
 ```
 
 ---
@@ -159,9 +181,17 @@ Toutes les données sont stockées localement via `SharedPreferences` :
 | `{titre}_star_train` | Étoile module Entraînement |
 | `{titre}_star_quiz` | Étoile module Défi Chrono |
 
+### Sauvegarde / restauration
+Espace Parent, rubrique « Sauvegarde de la progression » :
+- **Copier la sauvegarde** copie un texte JSON (`sauvegardeVersion: 1`) dans le presse-papiers : diamants, étoiles, leçons importées, mémoire par question, réglages (sons, vibrations, chrono) et clés de séance. Le code parent n'est jamais inclus. Le niveau se recalcule avec les diamants.
+- **Restaurer une sauvegarde** : coller le texte, vérification, résumé (leçons, niveau, diamants), confirmation. En cas d'erreur rien n'est modifié ; l'état d'avant est gardé dans la clé `sauvegarde_avant_restauration`.
+
 ---
 
 ## 📋 Versions
+
+### v2.0.0 — Vraie appli Android
+- Identifiant `fr.thibaut.laboemile`, version 2.0.0+6, leçon du soir, parcours guidé, mémoire par question, Trophées, séances douces, sauvegarde/restauration
 
 ### v1.0.0 — Première version complète
 - Système de 3 modules (Astuces, Entraînement, Défi Chrono)
