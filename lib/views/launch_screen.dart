@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme.dart';
+import '../widgets/microscope_icon.dart';
 
 /// Écran de lancement animé affiché au démarrage de l'app.
 /// Se ferme automatiquement après l'animation (~2.5s).
@@ -181,13 +182,9 @@ class _LaunchScreenState extends State<LaunchScreen>
                             ],
                           ),
                           child: const Center(
-                            // Icône Material (police embarquée) : pas de
-                            // glyphe manquant au chargement sur le web.
-                            child: Icon(
-                              Icons.biotech,
-                              size: 64,
-                              color: Colors.white,
-                            ),
+                            // Dessin en code : pas de police, pas de glyphe
+                            // manquant au chargement sur le web.
+                            child: MicroscopeIcon(size: 72),
                           ),
                         ),
                       ),

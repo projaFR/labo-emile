@@ -70,6 +70,9 @@ class LaboPalette {
   static const warn = Colors.orange;
   static const nuit = Color(0xFF1A237E);
   static const or = Colors.amber;
+
+  /// Doré des petites touches d'icône (même jaune que Cartable).
+  static const touche = Color(0xFFFFC43D);
 }
 
 /// Formes communes avec Réviser : cartes ~12 px, boutons ~8 px.
