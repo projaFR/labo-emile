@@ -167,6 +167,25 @@ L'appli est signée avec la clé de debug de l'ordinateur (comme Réviser) : tou
 flutter build web --release --base-href "/labo-emile/"
 ```
 
+### Version Windows (vraie appli PC)
+Prérequis : Visual Studio 2022 avec la charge « Développement Desktop en C++ » (et Flutter avec Windows activé).
+
+```bash
+flutter build windows --release
+```
+- Résultat : `build\windowsdunner\Release\labo_emile.exe` (fenêtre « Labo d'Émile », 520 × 900 au départ, redimensionnable ; le contenu reste centré à 720 px max).
+- Lancer : double-clic sur `Labo_PC.bat` (à la racine) ou sur `labo_emile.exe`.
+- Raccourci (à faire toi-même) : clic droit sur `Labo_PC.bat` ou `labo_emile.exe` > « Afficher plus d'options » > « Créer un raccourci », puis glisser le raccourci sur le Bureau. Pour l'épingler à la barre des tâches, utiliser le raccourci de `labo_emile.exe`.
+- Données : `%APPDATA%r.thibaut\Labo d'Emile\shared_preferences.json` (créé à la première sauvegarde de progression). Supprimer ce fichier remet le Labo à zéro.
+- Transférer la progression du téléphone au PC : sur le téléphone, Espace Parent > « Copier la sauvegarde », envoyer le texte au PC (message à soi-même, par exemple) ; sur le PC, Espace Parent > « Restaurer une sauvegarde », coller, confirmer. Dans l'autre sens, c'est pareil.
+
+**Aucune DLL de plugin (Smart App Control).** Smart App Control bloque les DLL de plugins Flutter. Le dossier `Release` ne contient donc que `labo_emile.exe`, `flutter_windows.dll` et `data\`. La technique :
+- `windows\CMakeLists.txt` n'inclut plus `flutter/generated_plugins.cmake` (que `flutter pub get` régénère avec audioplayers et url_launcher) et `windowsunner\CMakeLists.txt` ne compile plus `generated_plugin_registrant.cc` ; `flutter_window.cpp` n'appelle plus `RegisterPlugins`. Ces trois fichiers ne sont jamais réécrits par Flutter, donc `pub get` et `build` ne défont rien.
+- Son : sous Windows, `lib/services/lecteur_son_io.dart` joue le WAV en mémoire avec `PlaySound` (`winmm.dll`, via `dart:ffi` et le paquet `ffi`, Dart pur). Android et web gardent `audioplayers`.
+- Liens (« Créer avec Claude ») : `lib/services/ouvrir_lien_io.dart` utilise `cmd /c start`. Android et web gardent `url_launcher`.
+- `shared_preferences` et `confetti` sont du Dart pur.
+- Si on ajoute un jour un plugin natif, il ne fonctionnera pas sous Windows tant qu'on ne le déclare pas à la main dans `windows\CMakeLists.txt` (et il risque d'être bloqué).
+
 ---
 
 ## 💾 Persistance des données

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/ouvrir_lien.dart';
 import '../theme.dart';
 import '../models/lesson_model.dart';
 
@@ -28,12 +28,9 @@ class _ImportLeconViewState extends State<ImportLeconView> {
   }
 
   Future<void> _openClaude() async {
-    final uri = Uri.parse(
+    await ouvrirLien(
       'https://claude.ai/new?q=Le%C3%A7on%20pour%20le%20Labo%20d%27%C3%89mile',
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   Future<void> _pasteAndImport() async {

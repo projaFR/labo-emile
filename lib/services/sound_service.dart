@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
+import 'lecteur_son.dart';
 import 'settings_service.dart';
 
 /// Service singleton de sons synthétiques.
@@ -11,7 +11,7 @@ class SoundService {
   factory SoundService() => _instance;
   SoundService._internal();
 
-  final AudioPlayer _player = AudioPlayer();
+  final LecteurSon _player = creerLecteurSon();
   bool _enabled = true;
 
   bool get enabled => _enabled;
@@ -79,8 +79,7 @@ class SoundService {
   Future<void> _play(Uint8List wav) async {
     if (!_enabled || !SettingsService().sons) return;
     try {
-      await _player.stop();
-      await _player.play(BytesSource(wav));
+      await _player.jouer(wav);
     } catch (_) {}
   }
 
