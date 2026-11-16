@@ -1,8 +1,13 @@
 """Compose toutes les icônes du Labo à partir de captures/_dessin.png
-(produit par tool/generer_icone_test.dart) : fond en dégradé bleu, reflet,
-masque squircle (n = 4,4, mesuré sur Réviser/Cartable), calque Android, web, .ico.
-Teinte : Réviser 268,6 / Cartable 240,2 -> Labo 211,8 (même écart de -28,4)."""
-import colorsys
+(produit par tool/generer_icone_test.dart) : fond en dégradé bleu avec reflet
+net en haut à gauche et ombre en bas à droite (même construction que
+tool/generer_icone.py de Réviser et Cartable : dégradé linéaire à 60°, puis
+deux halos radiaux `max(0, 1-d)**2` composités par transparence), masque
+squircle (n = 4,4, mesuré sur Réviser/Cartable), calque Android, web, .ico.
+Teinte : Réviser 268,6 / Cartable 240,2 -> Labo 211,8 (même écart de -28,4).
+Couleurs du dégradé et des halos : moyenne (en H,L,S) de celles de Réviser et
+Cartable, ramenée à la teinte du Labo."""
+import math
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -11,30 +16,45 @@ R = Path(__file__).resolve().parent.parent
 N = 4.4          # exposant de la superellipse
 PROP = 0.60      # taille du dessin / carré
 CY = 0.48        # centre vertical du dessin
-HUE = 211.8
+HAUT = (101, 168, 243)   # bleu clair du dégradé (H 211,8 / L 0,674 / S 0,856)
+BAS = (46, 122, 208)     # bleu foncé du dégradé (H 211,8 / L 0,498 / S 0,637)
+OMBRE = (24, 67, 115)    # couleur du halo d'ombre (H 211,8 / L 0,272 / S 0,66)
+BLANC = (255, 255, 255)
 TAILLES_ICO = [16, 24, 32, 48, 64, 128, 256]
 
 
-def hls(h, l, s):
-    return np.array(colorsys.hls_to_rgb(h / 360, l, s))
+def degrade_lineaire(px, c1, c2, angle_deg=60):
+    """Dégradé de c1 (début) à c2 (fin), même formule que generer_icone.py
+    de Réviser/Cartable. Renvoie un tableau float (px, px, 3) dans [0, 1]."""
+    y, x = np.mgrid[0:px, 0:px].astype(float)
+    x, y = x / (px - 1), y / (px - 1)
+    a = math.radians(angle_deg)
+    dx, dy = math.cos(a), math.sin(a)
+    u = ((x - .5) * dx + (y - .5) * dy) / (abs(dx) * .5 + abs(dy) * .5) * .5 + .5
+    u = np.clip(u, 0, 1)[..., None]
+    c1, c2 = np.array(c1) / 255, np.array(c2) / 255
+    return c1 * (1 - u) + c2 * u
+
+
+def halo(px, cx, cy, rayon, intensite):
+    """Masque radial doux (même formule que Réviser/Cartable), 0..intensite."""
+    y, x = np.mgrid[0:px, 0:px].astype(float)
+    d = np.sqrt((x - cx) ** 2 + (y - cy) ** 2) / rayon
+    return intensite * np.clip(1 - d, 0, 1) ** 2
 
 
 def fond(px=1024):
-    """Dégradé mesuré sur Cartable (L,S aux 4 coins), teinte du Labo, reflet en haut."""
-    y, x = np.mgrid[0:px, 0:px] / (px - 1)
-    def bil(tl, tr, bl, br):
-        return (tl * (1 - x) + tr * x) * (1 - y) + (bl * (1 - x) + br * x) * y
-    L = bil(.745, .595, .55, .435)
-    S = bil(.77, .68, .63, .58)
-    H = HUE + 3.0 * (x * .5 + y * .5) - 1.5   # dérive de teinte de Cartable (+3 deg)
-    # reflet doux en haut à gauche (comme Réviser et Cartable)
-    d = np.sqrt(((x - .25) / .6) ** 2 + ((y - .05) / .5) ** 2)
-    L = L + .09 * np.clip(1 - d, 0, 1) ** 1.5
-    out = np.zeros((px, px, 3))
-    f = np.vectorize(colorsys.hls_to_rgb)
-    r, g, b = f(H / 360, np.clip(L, 0, 1), np.clip(S, 0, 1))
-    out[..., 0], out[..., 1], out[..., 2] = r, g, b
-    return Image.fromarray((out * 255 + .5).astype(np.uint8), "RGB")
+    """Dégradé bleu (60°) + reflet net en haut à gauche + ombre en bas à
+    droite, construits comme sur Réviser et Cartable (halo(250,160,760,.38)
+    et halo(900,980,620,.30) sur une image 1024, mis à l'échelle de `px`)."""
+    k = px / 1024
+    base = degrade_lineaire(px, HAUT, BAS, 60)
+    lumiere = halo(px, 250 * k, 160 * k, 760 * k, 0.38)[..., None]
+    ombre = halo(px, 900 * k, 980 * k, 620 * k, 0.30)[..., None]
+    blanc, ombre_c = np.array(BLANC) / 255, np.array(OMBRE) / 255
+    out = base * (1 - lumiere) + blanc * lumiere
+    out = out * (1 - ombre) + ombre_c * ombre
+    return Image.fromarray((np.clip(out, 0, 1) * 255 + .5).astype(np.uint8), "RGB")
 
 
 def masque(px):
