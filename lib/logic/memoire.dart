@@ -280,6 +280,32 @@ class Memoire {
     return liste.take(max).toList();
   }
 
+  /// Pour « Réviser quand même » : jusqu'à [max] questions déjà suivies (même
+  /// pas dues), les plus faibles d'abord (boîte la plus basse), puis les plus
+  /// anciennement vues (date de retour la plus ancienne). Ne change rien au
+  /// calendrier : c'est seulement une sélection.
+  List<RefQuestion> plusFaibles(
+    Iterable<RefQuestion> refs, {
+    int max = kTailleRevision,
+  }) {
+    final vues = <String>{};
+    final liste = <RefQuestion>[];
+    for (final r in refs) {
+      if (_etats[r.cle] == null) continue;
+      if (vues.add(r.cle)) liste.add(r);
+    }
+    liste.sort((a, b) {
+      final ea = _etats[a.cle]!;
+      final eb = _etats[b.cle]!;
+      final cb = ea.boite.compareTo(eb.boite);
+      if (cb != 0) return cb;
+      final c = ea.retour.compareTo(eb.retour);
+      if (c != 0) return c;
+      return a.cle.compareTo(b.cle);
+    });
+    return liste.take(max).toList();
+  }
+
   /// Nombre total de questions dues parmi [refs] (sans limite de 12).
   int nombreDues(Iterable<RefQuestion> refs) =>
       dues(refs, max: 1 << 30).length;
