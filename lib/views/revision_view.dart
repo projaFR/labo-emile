@@ -18,10 +18,15 @@ class RevisionView extends StatefulWidget {
   /// (0 si la récompense du jour a déjà été prise).
   final Future<int> Function() onTerminee;
 
+  /// « Réviser quand même » : séance libre, sans diamants et sans appeler
+  /// [onTerminee]. Les réponses comptent dans la mémoire comme d'habitude.
+  final bool libre;
+
   const RevisionView({
     super.key,
     required this.questions,
     required this.onTerminee,
+    this.libre = false,
   });
 
   @override
@@ -36,9 +41,13 @@ class _RevisionViewState extends State<RevisionView> {
     if (_i + 1 < widget.questions.length) {
       setState(() => _i++);
     } else {
-      widget.onTerminee().then((d) {
-        if (mounted) setState(() => _diamants = d);
-      });
+      if (widget.libre) {
+        _diamants = 0;
+      } else {
+        widget.onTerminee().then((d) {
+          if (mounted) setState(() => _diamants = d);
+        });
+      }
       setState(() => _i = widget.questions.length);
     }
   }
@@ -99,6 +108,14 @@ class _RevisionViewState extends State<RevisionView> {
       );
     }
     if (_i >= qs.length) {
+      if (widget.libre) {
+        return _message(
+          '🏆 Séance terminée',
+          'Bien joué, tu as tout repassé en revue. '
+              'Pas de diamants cette fois : pour le plaisir.',
+          bas: _retour(),
+        );
+      }
       return _message(
         '🏆 Révision du jour terminée !',
         _diamants == null
@@ -189,8 +206,8 @@ class _RevisionViewState extends State<RevisionView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          '🔁 Révision du jour',
+        title: Text(
+          widget.libre ? '🔁 Réviser quand même' : '🔁 Révision du jour',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
