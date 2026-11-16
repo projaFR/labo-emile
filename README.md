@@ -225,5 +225,6 @@ Espace Parent, rubrique « Sauvegarde de la progression » :
 ## Régénérer l'icône de l'appli
 
 1. `flutter test tool/generer_icone_test.dart` repeint le widget `MicroscopeIcon` dans `assets/` et `web/` (hors de `test/`, donc non lancé par `flutter test`).
-2. `dart run flutter_launcher_icons` régénère les icônes Android (mipmaps et icône adaptative).
-3. Remettre `pubspec.lock` tel quel (`git checkout -- pubspec.lock`) s'il a bougé.
+2. `python tool/generer_ico_windows.py` régénère `windows/runner/resources/app_icon.ico` (coins arrondis 25 %, fond transparent) à partir de `assets/icon.png`.
+3. `dart run flutter_launcher_icons` régénère les icônes Android (mipmaps et icône adaptative).
+4. Remettre `pubspec.lock` tel quel (`git checkout -- pubspec.lock`) s'il a bougé.
