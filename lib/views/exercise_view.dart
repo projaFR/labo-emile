@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
+import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
@@ -19,6 +20,10 @@ class ExerciseView extends StatefulWidget {
   /// quand on touche « SUIVANT ».
   final VoidCallback? surFin;
 
+  /// Mode « parcours » : appelée une seule fois à la fin de la séance, avec
+  /// le résultat ; la vue n'affiche alors pas son propre écran de fin.
+  final void Function(ResultatEtape)? surResultat;
+
   const ExerciseView({
     super.key,
     required this.lesson,
@@ -26,6 +31,7 @@ class ExerciseView extends StatefulWidget {
     required this.onFailure,
     required this.onPerfectScore,
     this.surFin,
+    this.surResultat,
   });
 
   @override
@@ -39,6 +45,10 @@ class _ExerciseViewState extends State<ExerciseView> {
   int _attempt = 1; // 1er ou 2e essai
   bool _showHint = false; // indice affiché (après une 1re erreur)
   int _failedFinal = 0; // exercices finis « réponse montrée » dans la séance
+  int _nbPremier = 0; // résultats de la séance, pour le parcours
+  int _nbDeuxieme = 0;
+  final List<String> _ratees = [];
+  bool _resultatEnvoye = false;
 
   // ── Séance : indices (dans la leçon) des exercices tirés ──────────────────
   List<int> _sessionIndices = [];
@@ -96,6 +106,10 @@ class _ExerciseViewState extends State<ExerciseView> {
       _vus = {};
       _currentIndex = 0;
       _failedFinal = 0;
+      _nbPremier = 0;
+      _nbDeuxieme = 0;
+      _ratees.clear();
+      _resultatEnvoye = false;
       _hasRemaining = false;
       _initCurrentExercise();
       _loading = false;
@@ -117,6 +131,10 @@ class _ExerciseViewState extends State<ExerciseView> {
       _vus = tirage.vusApres;
       _currentIndex = 0;
       _failedFinal = 0;
+      _nbPremier = 0;
+      _nbDeuxieme = 0;
+      _ratees.clear();
+      _resultatEnvoye = false;
       _hasRemaining = _vus.length < lesson.exercices.length;
       _initCurrentExercise();
       _loading = false;
@@ -267,6 +285,15 @@ class _ExerciseViewState extends State<ExerciseView> {
             : (_attempt == 1 ? Resultat.premierCoup : Resultat.deuxiemeEssai),
       );
     }
+    if (res == ResultatEssai.juste) {
+      if (_attempt == 1) {
+        _nbPremier++;
+      } else {
+        _nbDeuxieme++;
+      }
+    } else if (res == ResultatEssai.montrerReponse) {
+      _ratees.add(texteCourt(_currentExercise.question));
+    }
     setState(() {
       switch (res) {
         case ResultatEssai.juste:
@@ -313,10 +340,29 @@ class _ExerciseViewState extends State<ExerciseView> {
         // Fin de séance : on retient les exercices vus, et l'étoile est
         // donnée si tout est juste (au besoin au 2e essai).
         _saveSeen();
-        if (etoileExercices(_failedFinal)) {
+        final etoile = etoileExercices(_failedFinal);
+        if (etoile) {
           widget.onPerfectScore();
         }
+        _envoyerResultat(etoile);
       }
+    });
+  }
+
+  /// Mode parcours : remonte le résultat une seule fois, hors construction.
+  void _envoyerResultat(bool etoile) {
+    final cb = widget.surResultat;
+    if (cb == null || _resultatEnvoye) return;
+    _resultatEnvoye = true;
+    final r = ResultatEtape(
+      premierCoup: _nbPremier,
+      deuxiemeEssai: _nbDeuxieme,
+      rates: _failedFinal,
+      etoile: etoile,
+      aRetravailler: List.of(_ratees),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cb(r);
     });
   }
 
@@ -509,6 +555,7 @@ class _ExerciseViewState extends State<ExerciseView> {
     }
 
     if (_currentIndex >= _sessionIndices.length) {
+      if (widget.surResultat != null) return const SizedBox.shrink();
       final bool etoile = etoileExercices(_failedFinal);
       return Center(
         child: Padding(

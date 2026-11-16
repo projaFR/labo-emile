@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/database.dart';
 import '../logic/accueil_logic.dart';
 import '../logic/memoire.dart';
+import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
 import '../services/memoire_service.dart';
@@ -13,8 +14,9 @@ import '../theme.dart';
 import '../widgets/confetti_couche.dart';
 import 'aujourdhui_view.dart';
 import 'import_lecon_view.dart';
-import 'lecon_screen.dart';
+import 'lecon_hub_screen.dart';
 import 'lecons_view.dart';
+import 'parcours_screen.dart';
 import 'parent_view.dart';
 import 'pin_gate.dart';
 import 'revision_view.dart';
@@ -33,7 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   String? _matiereFiltre; // null = « Toutes »
   String? _derniereImportee;
-  int _totalDiamonds = 0;
+  // Diamants : un ValueNotifier laisse le parcours compter ceux gagnés.
+  final ValueNotifier<int> _diamantsNotif = ValueNotifier<int>(0);
+  int get _totalDiamonds => _diamantsNotif.value;
+  set _totalDiamonds(int v) => _diamantsNotif.value = v;
   int _currentCombo = 0;
 
   late ConfettiController _confettiController;
@@ -72,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     MemoireService().removeListener(_surMemoire);
     _confettiController.dispose();
+    _diamantsNotif.dispose();
     SoundService().dispose();
     super.dispose();
   }
@@ -326,19 +332,52 @@ class _HomeScreenState extends State<HomeScreen> {
     derniereImportee: _derniereImportee,
   );
 
-  void _ouvrirLecon(LeconRef r, {int etape = 0}) {
+  /// Page d'une leçon (depuis « Leçons »).
+  void _ouvrirHub(LeconRef r) {
     Navigator.of(context)
         .push(
           MaterialPageRoute(
-            builder: (_) => LeconScreen(
+            builder: (_) => LeconHubScreen(
+              lecon: r,
+              etoiles: () => _etoilesDe(r.lecon.titre),
+              maitrise: () => _memoire.maitrise(questionsDeLecon(r.lecon)),
+              nbARevoir: () => nbARevoirLecon(_memoire, r.lecon),
+              lancer: (etapes, {required complet}) =>
+                  _lancerParcours(r, etapes, complet: complet),
+            ),
+          ),
+        )
+        .then((_) {
+          if (mounted) setState(() {});
+        });
+  }
+
+  /// Lance un parcours guidé (leçon complète ou étape isolée).
+  Future<void> _lancerParcours(
+    LeconRef r,
+    List<int> etapes, {
+    required bool complet,
+    int depart = 0,
+  }) {
+    if (etapes.isEmpty) return Future.value();
+    return Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => ParcoursScreen(
               lesson: r.lecon,
-              etapeInitiale: etape,
+              etapes: etapes,
+              depart: depart,
+              complet: complet,
               confetti: _confettiController,
               etoiles: () => _etoilesDe(r.lecon.titre),
+              diamants: _diamantsNotif,
               onDiamondEarned: () => _awardDeckDiamond(r.lecon.titre),
               onEtoile: (i) => _unlockLessonStar(r.lecon.titre, i),
               onSuccess: _handleSuccess,
               onFailure: _handleFailure,
+              onRetourAccueil: () {
+                if (mounted) setState(() => _currentIndex = 0);
+              },
             ),
           ),
         )
@@ -350,8 +389,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void _continuerLeconDuSoir() {
     final r = _leconDuSoir;
     if (r == null) return;
-    final etape = premiereEtapeNonFaite(_etoilesDe(r.lecon.titre));
-    _ouvrirLecon(r, etape: etape < 0 ? 0 : etape);
+    final etapes = etapesDisponibles(r.lecon);
+    _lancerParcours(
+      r,
+      etapes,
+      complet: true,
+      depart: departParcours(etapes, _etoilesDe(r.lecon.titre)),
+    );
   }
 
   /// Ajouter une leçon : code parent d'abord, puis collage du JSON.
@@ -488,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
           etoilesDe: _etoilesDe,
           maitriseDe: (r) => _memoire.maitrise(questionsDeLecon(r.lecon)),
           nbARevoirDe: (r) => nbARevoirLecon(_memoire, r.lecon),
-          onOuvrir: _ouvrirLecon,
+          onOuvrir: _ouvrirHub,
           onAjouter: _ajouterLecon,
           onParent: _ouvrirParent,
         );

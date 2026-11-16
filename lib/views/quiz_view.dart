@@ -2,6 +2,7 @@ import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme.dart';
+import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
@@ -19,6 +20,10 @@ class QuizView extends StatefulWidget {
   /// diamants ; appelée quand on touche « SUIVANT ».
   final VoidCallback? surFin;
 
+  /// Mode « parcours » : appelée une fois à la fin du défi, avec le résultat ;
+  /// la vue n'affiche alors pas son propre écran de fin.
+  final void Function(ResultatEtape)? surResultat;
+
   const QuizView({
     super.key,
     required this.lesson,
@@ -26,6 +31,7 @@ class QuizView extends StatefulWidget {
     required this.onFailure,
     required this.onPerfectQuiz,
     this.surFin,
+    this.surResultat,
   });
 
   @override
@@ -43,6 +49,10 @@ class _QuizViewState extends State<QuizView> {
   int _selectedOptionIndex = -1;
   int _score = 0;
   int _lastGain = 0;
+  int _nbPremier = 0; // résultats du défi, pour le parcours
+  int _nbDeuxieme = 0; // temps écoulé : noté comme un 2e essai (cf. mémoire)
+  final List<String> _ratees = [];
+  bool _resultatEnvoye = false;
 
   // ✅ Ordre aléatoire des questions et des options
   List<QuizModel> _shuffledQuiz = [];
@@ -143,6 +153,13 @@ class _QuizViewState extends State<QuizView> {
 
   /// Mémoire par question : la question affichée est celle de la liste mélangée.
   void _noter(Resultat r) {
+    if (r == Resultat.premierCoup) {
+      _nbPremier++;
+    } else if (r == Resultat.deuxiemeEssai) {
+      _nbDeuxieme++;
+    } else {
+      _ratees.add(texteCourt(_shuffledQuiz[_currentIndex].question));
+    }
     MemoireService().enregistrer(
       cleQuestion(
         widget.lesson.titre,
@@ -162,14 +179,39 @@ class _QuizViewState extends State<QuizView> {
       _currentIndex++;
       if (_currentIndex < _shuffledQuiz.length) {
         _startQuestion();
-      } else if (_manche.etoile(_shuffledQuiz.length)) {
-        SoundService().playPerfect();
-        widget.onPerfectQuiz();
+      } else {
+        final etoile = _manche.etoile(_shuffledQuiz.length);
+        if (etoile) {
+          SoundService().playPerfect();
+          widget.onPerfectQuiz();
+        }
+        _envoyerResultat(etoile);
       }
     });
   }
 
+  /// Mode parcours : remonte le résultat une seule fois, hors construction.
+  void _envoyerResultat(bool etoile) {
+    final cb = widget.surResultat;
+    if (cb == null || _resultatEnvoye) return;
+    _resultatEnvoye = true;
+    final r = ResultatEtape(
+      premierCoup: _nbPremier,
+      deuxiemeEssai: _nbDeuxieme,
+      rates: _ratees.length,
+      etoile: etoile,
+      aRetravailler: List.of(_ratees),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cb(r);
+    });
+  }
+
   void _restartQuiz() {
+    _nbPremier = 0;
+    _nbDeuxieme = 0;
+    _ratees.clear();
+    _resultatEnvoye = false;
     setState(() {
       _currentIndex = 0;
       _score = 0;
@@ -189,6 +231,7 @@ class _QuizViewState extends State<QuizView> {
     }
 
     if (_currentIndex >= _shuffledQuiz.length) {
+      if (widget.surResultat != null) return const SizedBox.shrink();
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),

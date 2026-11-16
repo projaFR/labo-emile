@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
+import '../logic/parcours_logic.dart';
 import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
@@ -15,12 +16,17 @@ class FlashcardsView extends StatefulWidget {
   /// appelée dès que la carte est notée.
   final VoidCallback? surFin;
 
+  /// Mode « parcours » : appelée une fois quand le paquet est terminé, avec
+  /// le résultat ; la vue n'affiche alors pas son propre écran de fin.
+  final void Function(ResultatEtape)? surResultat;
+
   const FlashcardsView({
     super.key,
     required this.lesson,
     required this.onDiamondEarned,
     required this.onLessonCompleted,
     this.surFin,
+    this.surResultat,
   });
 
   @override
@@ -31,6 +37,9 @@ class _FlashcardsViewState extends State<FlashcardsView> {
   List<FlashcardModel> deck = [];
   bool showAnswer = false;
   bool _aRevoir = false; // au moins une carte notée « à revoir » dans ce tour
+  int _nbTotal = 0; // résultats du tour, pour le parcours
+  final List<String> _revoir = []; // cartes notées « à revoir » (sans doublon)
+  bool _resultatEnvoye = false;
 
   @override
   void initState() {
@@ -52,6 +61,9 @@ class _FlashcardsViewState extends State<FlashcardsView> {
       deck = List<FlashcardModel>.from(widget.lesson.astuces)..shuffle();
       showAnswer = false;
       _aRevoir = false;
+      _nbTotal = deck.length;
+      _revoir.clear();
+      _resultatEnvoye = false;
     });
   }
 
@@ -75,6 +87,8 @@ class _FlashcardsViewState extends State<FlashcardsView> {
       if (!success) {
         // « À revoir » n'est pas une faute : pas de son d'erreur.
         _aRevoir = true;
+        final t = texteCourt(deck[0].question);
+        if (!_revoir.contains(t)) _revoir.add(t);
         SoundService().hapticSuccess();
         final failedCard = deck.removeAt(0);
         deck.add(failedCard);
@@ -94,7 +108,24 @@ class _FlashcardsViewState extends State<FlashcardsView> {
           SoundService().playStar();
           widget.onLessonCompleted();
         }
+        _envoyerResultat();
       }
+    });
+  }
+
+  /// Mode parcours : remonte le résultat une seule fois, hors construction.
+  void _envoyerResultat() {
+    final cb = widget.surResultat;
+    if (cb == null || _resultatEnvoye) return;
+    _resultatEnvoye = true;
+    final r = ResultatEtape(
+      premierCoup: (_nbTotal - _revoir.length).clamp(0, _nbTotal),
+      rates: _revoir.length,
+      etoile: !_aRevoir,
+      aRetravailler: List.of(_revoir),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cb(r);
     });
   }
 
@@ -254,6 +285,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
   @override
   Widget build(BuildContext context) {
     if (deck.isEmpty) {
+      if (widget.surResultat != null) return const SizedBox.shrink();
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
