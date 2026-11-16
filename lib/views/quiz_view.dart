@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
 import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 
@@ -13,12 +15,17 @@ class QuizView extends StatefulWidget {
   final VoidCallback onFailure;
   final VoidCallback onPerfectQuiz;
 
+  /// Mode « Révision du jour » : une seule question, sans chrono ni
+  /// diamants ; appelée quand on touche « SUIVANT ».
+  final VoidCallback? surFin;
+
   const QuizView({
     super.key,
     required this.lesson,
     required this.onSuccess,
     required this.onFailure,
     required this.onPerfectQuiz,
+    this.surFin,
   });
 
   @override
@@ -43,7 +50,7 @@ class _QuizViewState extends State<QuizView> {
   @override
   void initState() {
     super.initState();
-    _limit = SettingsService().chronoSecondes;
+    _limit = widget.surFin != null ? 0 : SettingsService().chronoSecondes;
     _manche = MancheQuiz(_limit);
     _shuffleQuiz();
     _startQuestion();
@@ -99,6 +106,7 @@ class _QuizViewState extends State<QuizView> {
   /// Temps écoulé : ce n'est PAS une faute. On montre la bonne réponse
   /// (en douceur) et on passe à la suite, sans toucher au combo.
   void _timeOver() {
+    _noter(Resultat.deuxiemeEssai);
     setState(() {
       _isSubmitted = true;
       _timedOut = true;
@@ -111,6 +119,7 @@ class _QuizViewState extends State<QuizView> {
     _timer?.cancel();
 
     final bool isCorrect = (index == currentQuiz.indexCorrect);
+    _noter(isCorrect ? Resultat.premierCoup : Resultat.rate);
 
     setState(() {
       _selectedOptionIndex = index;
@@ -132,7 +141,23 @@ class _QuizViewState extends State<QuizView> {
     });
   }
 
+  /// Mémoire par question : la question affichée est celle de la liste mélangée.
+  void _noter(Resultat r) {
+    MemoireService().enregistrer(
+      cleQuestion(
+        widget.lesson.titre,
+        TypeQuestion.quiz,
+        _shuffledQuiz[_currentIndex].question,
+      ),
+      r,
+    );
+  }
+
   void _nextQuestion() {
+    if (widget.surFin != null) {
+      widget.surFin!();
+      return;
+    }
     setState(() {
       _currentIndex++;
       if (_currentIndex < _shuffledQuiz.length) {
@@ -224,6 +249,7 @@ class _QuizViewState extends State<QuizView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
+                  if (widget.surFin == null)
                   Text(
                     "Question ${_currentIndex + 1} / ${_shuffledQuiz.length}",
                     style: const TextStyle(
@@ -318,7 +344,9 @@ class _QuizViewState extends State<QuizView> {
                 Builder(builder: (context) {
                   final bool ok = _selectedOptionIndex == currentQuiz.indexCorrect;
                   final String msg = ok
-                      ? (_lastGain >= 2
+                      ? (widget.surFin != null
+                            ? "✅ Bonne réponse !"
+                            : _lastGain >= 2
                             ? "⚡ Bonus rapidité ! (+2 💎)"
                             : "✅ Bonne réponse ! (+1 💎)")
                       : _timedOut

@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
 class ExerciseView extends StatefulWidget {
@@ -12,12 +14,18 @@ class ExerciseView extends StatefulWidget {
   final VoidCallback onFailure;
   final VoidCallback onPerfectScore;
 
+  /// Mode « Révision du jour » : la leçon ne contient que l'exercice à
+  /// réviser ; pas de séance ni d'étoile, et cette fonction est appelée
+  /// quand on touche « SUIVANT ».
+  final VoidCallback? surFin;
+
   const ExerciseView({
     super.key,
     required this.lesson,
     required this.onSuccess,
     required this.onFailure,
     required this.onPerfectScore,
+    this.surFin,
   });
 
   @override
@@ -81,6 +89,18 @@ class _ExerciseViewState extends State<ExerciseView> {
   /// vus lors des séances précédentes de cette leçon).
   Future<void> _startSession() async {
     final lesson = widget.lesson;
+    if (widget.surFin != null) {
+      // Révision du jour : on ne touche pas aux séances (seance_vus_*).
+      // (Appelé depuis initState ou didUpdateWidget : pas de setState.)
+      _sessionIndices = List<int>.generate(lesson.exercices.length, (i) => i);
+      _vus = {};
+      _currentIndex = 0;
+      _failedFinal = 0;
+      _hasRemaining = false;
+      _initCurrentExercise();
+      _loading = false;
+      return;
+    }
     if (mounted && !_loading) setState(() => _loading = true);
     Set<int> vus = {};
     try {
@@ -234,6 +254,19 @@ class _ExerciseViewState extends State<ExerciseView> {
   /// bonne réponse montrée.
   void _appliquerResultat(bool estJuste) {
     final res = resoudreEssai(estJuste: estJuste, essai: _attempt);
+    // Mémoire par question : on note le résultat final (juste ou montrée).
+    if (res != ResultatEssai.reessayer) {
+      MemoireService().enregistrer(
+        cleQuestion(
+          widget.lesson.titre,
+          TypeQuestion.exercice,
+          _currentExercise.question,
+        ),
+        res == ResultatEssai.montrerReponse
+            ? Resultat.rate
+            : (_attempt == 1 ? Resultat.premierCoup : Resultat.deuxiemeEssai),
+      );
+    }
     setState(() {
       switch (res) {
         case ResultatEssai.juste:
@@ -268,6 +301,10 @@ class _ExerciseViewState extends State<ExerciseView> {
   }
 
   void _nextQuestion() {
+    if (widget.surFin != null) {
+      widget.surFin!();
+      return;
+    }
     setState(() {
       _currentIndex++;
       if (_currentIndex < _sessionIndices.length) {
@@ -537,6 +574,7 @@ class _ExerciseViewState extends State<ExerciseView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.surFin == null)
               Text(
                 'Exercice ${_currentIndex + 1} / ${_sessionIndices.length}',
                 style: const TextStyle(
@@ -546,7 +584,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                 ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: outerPad * 0.67),
+              if (widget.surFin == null) SizedBox(height: outerPad * 0.67),
               Card(
                 color: LaboPalette.paper,
                 shape: RoundedRectangleBorder(

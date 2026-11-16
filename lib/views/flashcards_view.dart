@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../models/lesson_model.dart';
+import '../logic/memoire.dart';
+import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
 class FlashcardsView extends StatefulWidget {
@@ -9,11 +11,16 @@ class FlashcardsView extends StatefulWidget {
   final VoidCallback onDiamondEarned;
   final VoidCallback onLessonCompleted;
 
+  /// Mode « Révision du jour » : une seule carte, sans diamant ni étoile ;
+  /// appelée dès que la carte est notée.
+  final VoidCallback? surFin;
+
   const FlashcardsView({
     super.key,
     required this.lesson,
     required this.onDiamondEarned,
     required this.onLessonCompleted,
+    this.surFin,
   });
 
   @override
@@ -50,6 +57,20 @@ class _FlashcardsViewState extends State<FlashcardsView> {
 
   void handleResult(bool success) {
     if (deck.isEmpty) return;
+    // Mémoire par question : « Maîtrisé » = bonne réponse du 1er coup,
+    // « À revoir » = à refaire demain.
+    MemoireService().enregistrer(
+      cleQuestion(widget.lesson.titre, TypeQuestion.astuce, deck[0].question),
+      success ? Resultat.premierCoup : Resultat.rate,
+    );
+    if (widget.surFin != null) {
+      if (success) {
+        SoundService().playSuccess();
+        SoundService().hapticSuccess();
+      }
+      widget.surFin!();
+      return;
+    }
     setState(() {
       if (!success) {
         // « À revoir » n'est pas une faute : pas de son d'erreur.
@@ -210,9 +231,9 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                       Expanded(
                         child: InkWell(
                           onTap: () => handleResult(true),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              "MAÎTRISÉ ✅",
+                              widget.surFin != null ? "JE SAVAIS ✅" : "MAÎTRISÉ ✅",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: LaboPalette.good,
@@ -274,6 +295,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            if (widget.surFin == null)
             Text(
               "Cartes restantes : ${deck.length}",
               style: const TextStyle(
@@ -282,7 +304,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                 color: LaboPalette.muted,
               ),
             ),
-            const SizedBox(height: 10),
+            if (widget.surFin == null) const SizedBox(height: 10),
             Expanded(
               child: Stack(
                 alignment: Alignment.center,
