@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../theme.dart';
+import '../widgets/microscope_icon.dart';
 
 /// Écran de lancement animé affiché au démarrage de l'app.
 /// Se ferme automatiquement après l'animation (~2.5s).
@@ -120,7 +122,7 @@ class _LaunchScreenState extends State<LaunchScreen>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF1A237E), // Bleu nuit
+                LaboPalette.nuit, // Bleu nuit
                 Color(0xFF283593),
                 Color(0xFF1565C0),
                 Color(0xFF0D47A1),
@@ -180,7 +182,9 @@ class _LaunchScreenState extends State<LaunchScreen>
                             ],
                           ),
                           child: const Center(
-                            child: Text('🔬', style: TextStyle(fontSize: 60)),
+                            // Dessin en code : pas de police, pas de glyphe
+                            // manquant au chargement sur le web.
+                            child: MicroscopeIcon(size: 72),
                           ),
                         ),
                       ),

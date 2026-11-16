@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/sound_service.dart';
 import '../models/lesson_model.dart';
@@ -198,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚠️ Sauvegarde impossible sur ce navigateur.'),
-          backgroundColor: Colors.red,
+          backgroundColor: LaboPalette.rouge,
           duration: Duration(seconds: 4),
         ),
       );
@@ -222,7 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("⭐ Étoile débloquée pour « $lessonTitle » ! (+5 💎)"),
-            backgroundColor: Colors.orange,
+            backgroundColor: LaboPalette.warn,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -269,7 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: const Color(0xFF1A237E),
+        backgroundColor: LaboPalette.nuit,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -287,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               newBadge,
               style: const TextStyle(
-                color: Colors.amber,
+                color: LaboPalette.or,
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
               ),
@@ -297,10 +298,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
+                backgroundColor: LaboPalette.or,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: LaboShape.card,
                 ),
               ),
               child: const Text(
@@ -405,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("❌ Code PIN incorrect !"),
-                      backgroundColor: Colors.red,
+                      backgroundColor: LaboPalette.rouge,
                     ),
                   );
                 }
@@ -469,7 +470,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
-                  backgroundColor: Colors.green,
+                  backgroundColor: LaboPalette.good,
                   duration: const Duration(seconds: 3),
                 ),
               );
@@ -587,7 +588,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: _currentCombo >= 5
-                                ? Colors.orange
+                                ? LaboPalette.warn
                                 : Colors.blue.shade200,
                             borderRadius: BorderRadius.circular(6),
                           ),
@@ -613,7 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: Colors.blue.shade100,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           nextLevel == null
-                              ? Colors.amber
+                              ? LaboPalette.or
                               : Colors.blue.shade400,
                         ),
                       ),
@@ -697,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: _selectedSubject,
                           icon: const Icon(
                             Icons.school,
-                            color: Colors.blue,
+                            color: LaboPalette.encre,
                             size: 20,
                           ),
                           style: const TextStyle(
@@ -732,12 +733,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: _selectedLesson,
                           icon: const Icon(
                             Icons.arrow_right,
-                            color: Colors.orange,
+                            color: LaboPalette.warn,
                             size: 20,
                           ),
                           style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.orange,
+                            color: LaboPalette.warn,
                             fontWeight: FontWeight.bold,
                           ),
                           onChanged: (val) =>
@@ -781,12 +782,12 @@ class _HomeScreenState extends State<HomeScreen> {
             gravity: 0.2,
             emissionFrequency: 0.05,
             colors: const [
-              Colors.blue,
-              Colors.orange,
-              Colors.green,
+              LaboPalette.encre,
+              LaboPalette.warn,
+              LaboPalette.good,
               Colors.yellow,
               Colors.purple,
-              Colors.red,
+              LaboPalette.rouge,
             ],
           ),
         ],

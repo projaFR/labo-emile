@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme.dart';
 import 'views/launch_screen.dart';
 import 'views/home_screen.dart';
 
@@ -21,10 +22,7 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: "Labo d'Émile",
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
+      theme: buildTheme(LaboColors.light),
       home: _showLaunch
           ? LaunchScreen(onDone: () => setState(() => _showLaunch = false))
           : HomeScreen(),

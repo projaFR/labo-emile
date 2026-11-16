@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -322,7 +323,7 @@ class _ParentViewState extends State<ParentView> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2C3E50),
+                        color: LaboPalette.ink,
                       ),
                     ),
                   ],
@@ -330,7 +331,7 @@ class _ParentViewState extends State<ParentView> {
                 IconButton(
                   icon: const Icon(
                     Icons.lock_reset,
-                    color: Colors.blue,
+                    color: LaboPalette.encre,
                     size: 28,
                   ),
                   onPressed: _changePinCodeDialog,
@@ -342,7 +343,7 @@ class _ParentViewState extends State<ParentView> {
               "💎 Récompenses d'Émile",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.blueGrey,
+                color: LaboPalette.muted,
               ),
             ),
             const SizedBox(height: 8),
@@ -358,7 +359,7 @@ class _ParentViewState extends State<ParentView> {
                     style: TextStyle(color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: LaboPalette.good,
                   ),
                 ),
                 ElevatedButton.icon(
@@ -379,7 +380,7 @@ class _ParentViewState extends State<ParentView> {
               "📸 Injecter une leçon (Code de l'IA)",
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.blueGrey,
+                color: LaboPalette.muted,
               ),
             ),
             const SizedBox(height: 8),
@@ -423,7 +424,7 @@ class _ParentViewState extends State<ParentView> {
                 style: TextStyle(
                   color: _errorMessage!.startsWith('⚠️')
                       ? Colors.orange.shade800
-                      : Colors.red,
+                      : LaboPalette.rouge,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -447,7 +448,7 @@ class _ParentViewState extends State<ParentView> {
                         backgroundColor: Colors.teal,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: LaboShape.card,
                         ),
                       ),
                     ),
@@ -465,10 +466,10 @@ class _ParentViewState extends State<ParentView> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: LaboPalette.encre,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: LaboShape.card,
                         ),
                       ),
                     ),
@@ -479,20 +480,20 @@ class _ParentViewState extends State<ParentView> {
             const Divider(height: 40),
             const Text(
               "🚨 Zone de danger",
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              style: TextStyle(fontWeight: FontWeight.bold, color: LaboPalette.rouge),
             ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: widget.onDeleteCurrentLesson,
-                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                icon: const Icon(Icons.delete_forever, color: LaboPalette.rouge),
                 label: Text(
                   "Supprimer la leçon : ${widget.currentLessonTitle}",
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(color: LaboPalette.rouge),
                 ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red),
+                  side: const BorderSide(color: LaboPalette.rouge),
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import 'package:flutter/services.dart';
 import '../models/lesson_model.dart';
 import '../services/sound_service.dart';
@@ -258,7 +259,7 @@ class _ExerciseViewState extends State<ExerciseView> {
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF2C3E50),
+              color: LaboPalette.ink,
             ),
           ),
         );
@@ -292,13 +293,13 @@ class _ExerciseViewState extends State<ExerciseView> {
             chipColor = slotCorrect
                 ? Colors.green.shade100
                 : Colors.red.shade100;
-            borderColor = slotCorrect ? Colors.green : Colors.red;
+            borderColor = slotCorrect ? LaboPalette.good : LaboPalette.rouge;
             textColor = slotCorrect
                 ? Colors.green.shade800
                 : Colors.red.shade800;
           } else if (isActive) {
             chipColor = Colors.blue.shade50;
-            borderColor = Colors.blue;
+            borderColor = LaboPalette.encre;
             textColor = Colors.blue.shade800;
           } else if (filled) {
             chipColor = Colors.orange.shade50;
@@ -327,7 +328,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                   ),
                   decoration: BoxDecoration(
                     color: chipColor,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: LaboShape.button,
                     border: Border.all(
                       color: borderColor,
                       width: isActive ? 2.5 : 1.5,
@@ -371,18 +372,18 @@ class _ExerciseViewState extends State<ExerciseView> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue,
+                    color: LaboPalette.encre,
                   ),
                   decoration: InputDecoration(
                     contentPadding: EdgeInsets.zero,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: LaboShape.button,
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: LaboShape.button,
                       borderSide: BorderSide(
                         color: _isSubmitted
-                            ? (_isCorrect ? Colors.green : Colors.red)
+                            ? (_isCorrect ? LaboPalette.good : LaboPalette.rouge)
                             : Colors.grey,
                         width: 2,
                       ),
@@ -423,7 +424,7 @@ class _ExerciseViewState extends State<ExerciseView> {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: LaboPalette.encre,
               ),
             ),
             const SizedBox(height: 16),
@@ -466,17 +467,17 @@ class _ExerciseViewState extends State<ExerciseView> {
                 'Exercice ${_currentIndex + 1} / ${widget.lesson.exercices.length}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.blueGrey,
+                  color: LaboPalette.muted,
                   fontSize: 13,
                 ),
                 textAlign: TextAlign.center,
               ),
               SizedBox(height: outerPad * 0.67),
               Card(
-                color: const Color(0xFFF8FAFC),
+                color: LaboPalette.paper,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
+                  side: const BorderSide(color: LaboPalette.line, width: 2),
                 ),
                 child: Padding(
                   padding: EdgeInsets.all(innerPad),
@@ -488,7 +489,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: consoleFontSize,
-                              color: Colors.blue,
+                              color: LaboPalette.encre,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -549,7 +550,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                                       backgroundColor: btnColor ?? Colors.white,
                                       side: BorderSide(
                                         color: isSelected && !_isSubmitted
-                                            ? Colors.blue
+                                            ? LaboPalette.encre
                                             : Colors.black12,
                                         width: isSelected && !_isSubmitted ? 2 : 1,
                                       ),
@@ -609,11 +610,11 @@ class _ExerciseViewState extends State<ExerciseView> {
                             : null),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isSubmitted
-                        ? Colors.blue
-                        : (canValidate ? Colors.green : Colors.grey.shade400),
+                        ? LaboPalette.encre
+                        : (canValidate ? LaboPalette.good : Colors.grey.shade400),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: LaboShape.card,
                     ),
                   ),
                   child: Text(
