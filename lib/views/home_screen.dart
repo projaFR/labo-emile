@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
 import '../logic/trophees_logic.dart';
 import '../models/lesson_model.dart';
+import '../services/labo_sync_service.dart';
 import '../services/memoire_service.dart';
 import '../services/settings_service.dart';
 import '../services/sound_service.dart';
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _totalDiamonds => _diamantsNotif.value;
   set _totalDiamonds(int v) => _diamantsNotif.value = v;
   int _currentCombo = 0;
+  int _derniereRevisionSync = 0;
 
   late ConfettiController _confettiController;
   final Map<String, List<bool>> _lessonsRewards = {};
@@ -73,6 +76,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadProgress();
     MemoireService().addListener(_surMemoire);
     MemoireService().charger();
+    LaboSyncService().addListener(_surSync);
+    unawaited(_demarrerSync());
+  }
+
+  Future<void> _demarrerSync() async {
+    await LaboSyncService().initialiser();
+    _derniereRevisionSync = LaboSyncService().revisionLocale;
+    if (LaboSyncService().estConfigure) {
+      await LaboSyncService().synchroniserMaintenant();
+    }
+  }
+
+  void _surSync() {
+    final sync = LaboSyncService();
+    if (sync.revisionLocale != _derniereRevisionSync) {
+      _derniereRevisionSync = sync.revisionLocale;
+      _rechargerDepuisDisque();
+    } else if (mounted) {
+      setState(() {});
+    }
   }
 
   void _surMemoire() {
@@ -81,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    LaboSyncService().removeListener(_surSync);
     MemoireService().removeListener(_surMemoire);
     _confettiController.dispose();
     _diamantsNotif.dispose();
@@ -151,8 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  /// Après une restauration : repart des leçons de base et relit tout.
-  Future<void> _rechargerApresRestauration() async {
+  /// Recharge la base et les récompenses depuis SharedPreferences (après synchro).
+  void _rechargerDepuisDisque() {
     _database
       ..clear()
       ..addAll({
@@ -160,11 +184,17 @@ class _HomeScreenState extends State<HomeScreen> {
           e.key: List<LessonModel>.from(e.value),
       });
     _lessonsRewards.clear();
+    _loadProgress();
+  }
+
+  /// Après une restauration : repart des leçons de base et relit tout.
+  Future<void> _rechargerApresRestauration() async {
     _currentCombo = 0;
     _matiereFiltre = null;
     await SettingsService().load();
     await MemoireService().charger(forcer: true);
-    _loadProgress();
+    _rechargerDepuisDisque();
+    LaboSyncService().signalerChangementLocal(remiseAZero: true);
   }
 
   Future<void> _saveCustomLessons() async {
@@ -204,8 +234,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!_lessonsRewards[lessonTitle]![starIndex]) {
         _lessonsRewards[lessonTitle]![starIndex] = true;
         _totalDiamonds += 5;
-        prefs.setBool('${lessonTitle}_star_${_getStarKey(starIndex)}', true);
-        prefs.setInt('emile_diamonds', _totalDiamonds);
+        Future.wait([
+          prefs.setBool('${lessonTitle}_star_${_getStarKey(starIndex)}', true),
+          prefs.setInt('emile_diamonds', _totalDiamonds),
+        ]).then((_) => LaboSyncService().signalerChangementLocal());
         SoundService().playStar();
         _confettiController.play();
         final etoilesLecon = _lessonsRewards[lessonTitle]!;
@@ -262,9 +294,10 @@ class _HomeScreenState extends State<HomeScreen> {
       } else {
         _totalDiamonds += gain;
       }
-      SharedPreferences.getInstance().then(
-        (prefs) => prefs.setInt('emile_diamonds', _totalDiamonds),
-      );
+      SharedPreferences.getInstance().then((prefs) async {
+        await prefs.setInt('emile_diamonds', _totalDiamonds);
+        LaboSyncService().signalerChangementLocal();
+      });
     });
     final String badgeAfter = badgePour(_totalDiamonds);
     if (badgeAfter != badgeBefore) {
@@ -467,24 +500,36 @@ class _HomeScreenState extends State<HomeScreen> {
       _derniereImportee = newLesson.titre;
       _lessonsRewards[newLesson.titre] = [false, false, false];
     });
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('derniere_lecon_importee', newLesson.titre),
-    );
-    _saveCustomLessons().then((_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
-            backgroundColor: LaboPalette.good,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    });
+    SharedPreferences.getInstance()
+        .then((prefs) => prefs.setString('derniere_lecon_importee', newLesson.titre))
+        .then((_) => _saveCustomLessons())
+        .then((_) {
+          LaboSyncService().signalerChangementLocal(
+            matiereAjoutee: matiere,
+            titreAjoute: newLesson.titre,
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
+                backgroundColor: LaboPalette.good,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        });
   }
 
   void _supprimerLecon(String titre) {
     Navigator.pop(context); // ferme l'Espace Parent
+    final aSupprimerSync = <(String, String)>[];
+    for (final m in _database.keys) {
+      for (final l in _database[m]!) {
+        if (l.titre == titre && !_initialTitles.contains(l.titre)) {
+          aSupprimerSync.add((m, l.titre));
+        }
+      }
+    }
     setState(() {
       _cacheQuestions = null;
       for (final m in _database.keys.toList()) {
@@ -502,7 +547,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _matiereFiltre = null;
       }
     });
-    _saveCustomLessons();
+    _saveCustomLessons().then((_) {
+      for (final p in aSupprimerSync) {
+        LaboSyncService().signalerSuppressionLecon(p.$1, p.$2);
+      }
+    });
   }
 
   // ── Espace Parent ────────────────────────────────────────────────────────
@@ -523,14 +572,18 @@ class _HomeScreenState extends State<HomeScreen> {
           return "${_memoire.nombreSuiviesParmi(refs)} questions suivies, "
               "${_memoire.nombreDues(refs)} à revoir aujourd'hui";
         },
-        onResetMemoire: () => MemoireService().reinitialiser(),
+        onResetMemoire: () async {
+          await MemoireService().reinitialiser();
+          LaboSyncService().signalerChangementLocal(remiseAZero: true);
+        },
         onRestauree: _rechargerApresRestauration,
         onDiamondsChanged: (amount) {
           setState(() {
             _totalDiamonds += amount;
-            SharedPreferences.getInstance().then(
-              (prefs) => prefs.setInt('emile_diamonds', _totalDiamonds),
-            );
+            SharedPreferences.getInstance().then((prefs) async {
+              await prefs.setInt('emile_diamonds', _totalDiamonds);
+              LaboSyncService().signalerChangementLocal();
+            });
           });
         },
         onClearDiamonds: () {
@@ -539,21 +592,39 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentCombo = 0;
             _lessonsRewards.clear();
             // Ne PAS faire prefs.clear() — ça effacerait aussi les leçons custom !
-            SharedPreferences.getInstance().then((prefs) {
-              prefs.setInt('emile_diamonds', 0);
+            SharedPreferences.getInstance().then((prefs) async {
+              await prefs.setInt('emile_diamonds', 0);
               // Supprimer toutes les étoiles sans toucher à custom_lessons
-              _database.forEach((_, lessons) {
+              for (final lessons in _database.values) {
                 for (final l in lessons) {
-                  prefs.remove('${l.titre}_star_astuces');
-                  prefs.remove('${l.titre}_star_train');
-                  prefs.remove('${l.titre}_star_quiz');
+                  await prefs.remove('${l.titre}_star_astuces');
+                  await prefs.remove('${l.titre}_star_train');
+                  await prefs.remove('${l.titre}_star_quiz');
                 }
-              });
+              }
+              LaboSyncService().signalerChangementLocal(remiseAZero: true);
             });
           });
         },
         titresLecons: [for (final r in _toutes) r.lecon.titre],
         onDeleteLesson: _supprimerLecon,
+      ),
+    );
+  }
+
+  Future<void> _synchroniserDepuisListe() async {
+    final sync = LaboSyncService();
+    final ok = await sync.synchroniserMaintenant();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? '☁️ Leçons et progrès synchronisés !'
+              : (sync.erreur ?? 'La synchronisation a échoué.'),
+        ),
+        backgroundColor: ok ? LaboPalette.good : LaboPalette.rouge,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -574,6 +645,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onRevisionLibre: _ouvrirRevisionLibre,
         );
       case 1:
+        final sync = LaboSyncService();
         return LeconsView(
           toutes: _toutes,
           matiereChoisie: _matiereFiltre,
@@ -589,6 +661,9 @@ class _HomeScreenState extends State<HomeScreen> {
           onOuvrir: _ouvrirHub,
           onAjouter: _ajouterLecon,
           onParent: _ouvrirParent,
+          syncConfiguree: sync.estConfigure,
+          syncEnCours: sync.etat == EtatSyncLabo.synchronisation,
+          onSynchroniser: _synchroniserDepuisListe,
         );
       default:
         final toutes = _toutes;

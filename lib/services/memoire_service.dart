@@ -22,6 +22,9 @@ class MemoireService extends ChangeNotifier {
   /// Vrai si un texte illisible a été mis de côté au dernier chargement.
   bool secoursCree = false;
 
+  /// Appelé après chaque nouvelle réponse enregistrée localement.
+  VoidCallback? onModification;
+
   Future<void>? _chargement;
   Future<void> _ecriture = Future.value();
 
@@ -67,6 +70,7 @@ class MemoireService extends ChangeNotifier {
     memoire.enregistrer(cle, r);
     notifyListeners();
     await _sauver();
+    onModification?.call();
   }
 
   /// Efface la mémoire par question (ne touche à rien d'autre : ni diamants,

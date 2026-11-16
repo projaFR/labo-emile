@@ -6,6 +6,7 @@ import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
+import '../services/labo_sync_service.dart';
 import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 
@@ -148,6 +149,7 @@ class _ExerciseViewState extends State<ExerciseView> {
         _prefsKey,
         _vus.map((i) => i.toString()).toList(),
       );
+      LaboSyncService().signalerChangementLocal();
     } catch (_) {}
   }
 

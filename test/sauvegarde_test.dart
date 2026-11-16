@@ -6,6 +6,7 @@ import 'package:myapp/logic/memoire.dart';
 import 'package:myapp/logic/sauvegarde.dart';
 import 'package:myapp/models/lesson_model.dart';
 import 'package:myapp/services/gemini_key_store.dart';
+import 'package:myapp/services/labo_sync_service.dart';
 
 Map<String, Object> _exemple() {
   final l = InitialDatabase.data.values.first.first;
@@ -123,6 +124,8 @@ void main() {
     );
     SharedPreferences.setMockInitialValues({
       kCleGeminiPrefs: 'AIzaSecretGeminiKey1234',
+      LaboSyncService.kCleSessionFirebase: '{"refreshToken":"secret-rt"}',
+      LaboSyncService.kCleMetaSync: '{"diamantsModifieLe":"2026-11-17"}',
       'custom_lessons': jsonEncode({
         'Maths': [lecon.toJson()],
       }),
@@ -131,6 +134,9 @@ void main() {
     final t = await sauvegardeActuelle(prefs);
     expect(t.contains('AIzaSecretGeminiKey1234'), isFalse);
     expect(t.contains(kCleGeminiPrefs), isFalse);
+    expect(t.contains('secret-rt'), isFalse);
+    expect(t.contains(LaboSyncService.kCleSessionFirebase), isFalse);
+    expect(t.contains(LaboSyncService.kCleMetaSync), isFalse);
     expect(t.contains('🚀 Pilote'), isTrue);
 
     final v = validerSauvegarde(t);

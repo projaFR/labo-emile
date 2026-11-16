@@ -5,8 +5,10 @@ import '../version.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_key_store.dart';
+import '../services/labo_sync_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/dialogue_cle_gemini.dart';
+import '../widgets/dialogue_sync_firebase.dart';
 
 class ParentView extends StatefulWidget {
   final int currentDiamonds;
@@ -448,6 +450,82 @@ class _ParentViewState extends State<ParentView> {
                 icon: const Icon(Icons.key),
                 label: const Text("Configurer la clé Gemini gratuite"),
               ),
+            ),
+            const Divider(height: 30),
+            const Text(
+              "☁️ Synchronisation (Téléphone ↔ PC)",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ListenableBuilder(
+              listenable: LaboSyncService(),
+              builder: (_, _) {
+                final sync = LaboSyncService();
+                final enCours = sync.etat == EtatSyncLabo.synchronisation;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      sync.libelleEtat,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: sync.etat == EtatSyncLabo.erreur
+                            ? LaboPalette.rouge
+                            : LaboPalette.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (sync.estConfigure) ...[
+                      OutlinedButton.icon(
+                        onPressed: enCours
+                            ? null
+                            : () async {
+                                final ok = await sync.synchroniserMaintenant();
+                                if (!mounted) return;
+                                _message(
+                                  ok
+                                      ? 'Synchronisation terminée.'
+                                      : (sync.erreur ??
+                                            'La synchronisation a échoué.'),
+                                  erreur: !ok,
+                                );
+                              },
+                        icon: const Icon(Icons.sync),
+                        label: Text(
+                          enCours
+                              ? 'Synchronisation en cours…'
+                              : '🔄 Synchroniser maintenant',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    OutlinedButton.icon(
+                      onPressed: enCours
+                          ? null
+                          : () async {
+                              final modifie = await ouvrirDialogueSyncFirebase(
+                                context,
+                              );
+                              if (!modifie || !mounted) return;
+                              _message(
+                                sync.estConfigure
+                                    ? 'Synchronisation Firebase activée.'
+                                    : 'Compte Firebase déconnecté.',
+                              );
+                            },
+                      icon: const Icon(Icons.cloud_outlined),
+                      label: Text(
+                        sync.estConfigure
+                            ? '⚙️ Gérer le compte Firebase'
+                            : '☁️ Configurer le compte Firebase',
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const Divider(height: 30),
             const Text(

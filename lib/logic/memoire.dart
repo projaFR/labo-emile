@@ -212,6 +212,8 @@ class Memoire {
 
   int get nombreSuivies => _etats.length;
 
+  Map<String, EtatQuestion> get etats => Map.unmodifiable(_etats);
+
   EtatQuestion? etat(String cle) => _etats[cle];
 
   /// Enregistre une réponse. Voir les règles en tête de fichier.

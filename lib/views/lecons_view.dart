@@ -19,6 +19,9 @@ class LeconsView extends StatelessWidget {
   final ValueChanged<LeconRef> onOuvrir;
   final VoidCallback onAjouter;
   final VoidCallback onParent;
+  final VoidCallback? onSynchroniser;
+  final bool syncConfiguree;
+  final bool syncEnCours;
 
   const LeconsView({
     super.key,
@@ -32,6 +35,9 @@ class LeconsView extends StatelessWidget {
     required this.onOuvrir,
     required this.onAjouter,
     required this.onParent,
+    this.onSynchroniser,
+    this.syncConfiguree = false,
+    this.syncEnCours = false,
   });
 
   @override
@@ -56,6 +62,18 @@ class LeconsView extends StatelessWidget {
                 ),
               ),
             ),
+            if (syncConfiguree && onSynchroniser != null)
+              IconButton(
+                tooltip: "Synchroniser",
+                onPressed: syncEnCours ? null : onSynchroniser,
+                icon: syncEnCours
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_sync, color: LaboPalette.encre),
+              ),
             IconButton(
               tooltip: "Espace Parent",
               onPressed: onParent,
