@@ -105,8 +105,23 @@ class RefQuestion {
   const RefQuestion(this.lecon, this.type, this.index, this.cle);
 }
 
+/// Nombre de vrais calculs d'empreintes faits par [questionsDeLecon]
+/// (sert aux tests : le résultat est gardé en cache par leçon).
+int compteurCalculsQuestions = 0;
+
+final Expando<List<RefQuestion>> _cacheQuestions = Expando('questionsDeLecon');
+
 /// Toutes les questions d'une leçon (cartes, exercices, quiz).
-List<RefQuestion> questionsDeLecon(LessonModel l) => [
+/// Une leçon est immuable : le résultat est calculé une seule fois (les
+/// empreintes ne sont plus recalculées à chaque reconstruction de l'accueil).
+List<RefQuestion> questionsDeLecon(LessonModel l) {
+  final enCache = _cacheQuestions[l];
+  if (enCache != null) return enCache;
+  compteurCalculsQuestions++;
+  return _cacheQuestions[l] = List.unmodifiable(_calculerQuestions(l));
+}
+
+List<RefQuestion> _calculerQuestions(LessonModel l) => [
   for (var i = 0; i < l.astuces.length; i++)
     RefQuestion(
       l,
