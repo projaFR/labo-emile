@@ -21,6 +21,9 @@ const _degrade = LinearGradient(
   ],
 );
 
+// Bras plein (blanc bleuté), lisible sur tous les fonds.
+const _bras = Color(0xFFB9CBEB);
+
 void main() {
   final cle = GlobalKey();
 
@@ -30,6 +33,7 @@ void main() {
     int px, {
     required bool fond,
     required double part, // taille du widget relative au carré
+    Color? bras,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(px.toDouble(), px.toDouble());
@@ -43,7 +47,7 @@ void main() {
             height: px.toDouble(),
             decoration: fond ? const BoxDecoration(gradient: _degrade) : null,
             alignment: Alignment.center,
-            child: MicroscopeIcon(size: px * part),
+            child: MicroscopeIcon(size: px * part, bras: bras),
           ),
         ),
       ),
@@ -61,19 +65,19 @@ void main() {
   testWidgets('génère les icônes', (tester) async {
     addTearDown(tester.view.reset);
     // Le dessin occupe ~70 % de son carré.
-    await rendre(tester, 'assets/icon.png', 1024, fond: true, part: 1.0);
-    // Zone sûre adaptative Android : 66 % (0,70 x 0,93 = 65 %).
+    await rendre(tester, 'assets/icon.png', 1024, fond: true, part: 0.82, bras: _bras);
+    // Zone sûre adaptative Android : 66 % (silhouette ~83 % du widget : 0,70 x 0,83 = 58 %).
     await rendre(tester, 'assets/icon_foreground.png', 1024,
-        fond: false, part: 0.93);
+        fond: false, part: 0.70, bras: _bras);
     for (final t in [192, 512]) {
-      await rendre(tester, 'web/icons/Icon-$t.png', t, fond: true, part: 1.0);
-      // Maskable : contenu dans 80 % (0,70 x 1,0 = 70 %).
+      await rendre(tester, 'web/icons/Icon-$t.png', t, fond: true, part: 0.82, bras: _bras);
+      // Maskable : contenu dans 80 % (~68 %).
       await rendre(tester, 'web/icons/Icon-maskable-$t.png', t,
-          fond: true, part: 1.0);
+          fond: true, part: 0.82, bras: _bras);
     }
-    await rendre(tester, 'web/favicon.png', 48, fond: true, part: 1.1);
+    await rendre(tester, 'web/favicon.png', 48, fond: true, part: 0.95, bras: _bras);
     for (final t in [512, 192, 48]) {
-      await rendre(tester, 'captures/_apercu_$t.png', t, fond: true, part: 1.0);
+      await rendre(tester, 'captures/_apercu_$t.png', t, fond: true, part: 0.82, bras: _bras);
     }
   });
 }

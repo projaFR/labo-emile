@@ -20,24 +20,29 @@ class MicroscopeIcon extends StatelessWidget {
     this.size = 64,
     this.color = Colors.white,
     this.accent = LaboPalette.touche,
+    this.bras,
   });
 
   final double size;
   final Color color;
   final Color accent;
 
+  /// Couleur pleine du bras (sinon : blanc translucide, qui prend le fond).
+  final Color? bras;
+
   @override
   Widget build(BuildContext context) => CustomPaint(
         size: Size.square(size),
-        painter: _MicroscopePainter(color, accent),
+        painter: _MicroscopePainter(color, accent, bras),
       );
 }
 
 class _MicroscopePainter extends CustomPainter {
-  _MicroscopePainter(this.color, this.accent);
+  _MicroscopePainter(this.color, this.accent, this.bras);
 
   final Color color;
   final Color accent;
+  final Color? bras;
 
   /// Inclinaison du tube (vers la gauche, bras à droite).
   static const double _tilt = -0.38;
@@ -64,7 +69,7 @@ class _MicroscopePainter extends CustomPainter {
     // Ton de derrière : le blanc rendu translucide, il prend la teinte du fond.
     final back = Paint()
       ..isAntiAlias = true
-      ..color = color.withValues(alpha: 0.55)
+      ..color = bras ?? color.withValues(alpha: 0.55)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 12
       ..strokeCap = StrokeCap.round;
@@ -124,6 +129,6 @@ class _MicroscopePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MicroscopePainter old) =>
-      old.color != color || old.accent != accent;
+      old.color != color || old.accent != accent || old.bras != bras;
 }
 
