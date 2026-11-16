@@ -1,57 +1,33 @@
-// Génère les icônes de l'appli en peignant le widget MicroscopeIcon.
+// Peint le widget MicroscopeIcon seul (fond transparent) en 1024 px.
 // Lancer : flutter test tool/generer_icone_test.dart
-// (hors du dossier test/, donc ignoré par un simple `flutter test`).
+// Puis : python tool/generer_icones.py (fond, masque, tailles, .ico).
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:myapp/theme.dart';
 import 'package:myapp/widgets/microscope_icon.dart';
 
-const _degrade = LinearGradient(
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-  colors: [
-    LaboPalette.nuit,
-    Color(0xFF283593),
-    Color(0xFF1565C0),
-    Color(0xFF0D47A1),
-  ],
-);
-
-// Bras plein (blanc bleuté), lisible sur tous les fonds.
-const _bras = Color(0xFFB9CBEB);
+// Bras opaque : blanc teinté de la teinte du fond (HSL 212, 60 %, 88 %).
+const _bras = Color(0xFFCEE0F3);
 
 void main() {
   final cle = GlobalKey();
 
-  Future<void> rendre(
-    WidgetTester tester,
-    String chemin,
-    int px, {
-    required bool fond,
-    required double part, // taille du widget relative au carré
-    Color? bras,
-    Offset decalage = Offset.zero,
-  }) async {
+  testWidgets('peint le dessin', (tester) async {
+    addTearDown(tester.view.reset);
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = Size(px.toDouble(), px.toDouble());
+    tester.view.physicalSize = const Size(1024, 1024);
     await tester.pumpWidget(
       Directionality(
         textDirection: TextDirection.ltr,
         child: RepaintBoundary(
           key: cle,
-          child: Container(
-            width: px.toDouble(),
-            height: px.toDouble(),
-            decoration: fond ? const BoxDecoration(gradient: _degrade) : null,
-            alignment: Alignment.center,
-            child: Transform.translate(
-              offset: decalage,
-              child: MicroscopeIcon(size: px * part, bras: bras),
-            ),
+          child: const SizedBox(
+            width: 1024,
+            height: 1024,
+            child: Center(child: MicroscopeIcon(size: 720, bras: _bras)),
           ),
         ),
       ),
@@ -61,29 +37,9 @@ void main() {
           cle.currentContext!.findRenderObject()! as RenderRepaintBoundary;
       final ui.Image img = await b.toImage(pixelRatio: 1);
       final data = await img.toByteData(format: ui.ImageByteFormat.png);
-      final f = File(chemin)..createSync(recursive: true);
-      f.writeAsBytesSync(data!.buffer.asUint8List());
+      File('captures/_dessin.png')
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(data!.buffer.asUint8List());
     });
-  }
-
-  testWidgets('génère les icônes', (tester) async {
-    addTearDown(tester.view.reset);
-    // Le dessin occupe ~70 % de son carré.
-    await rendre(tester, 'assets/icon.png', 1024, fond: true, part: 0.82, bras: _bras);
-    // Zone sûre adaptative Android : cercle de 60 % (rayon max 307 px, mesuré)
-    // ; le décalage recentre le dessin sur son cercle minimal. Ancien : 66 % (silhouette ~83 % du widget : 0,70 x 0,83 = 58 %).
-    await rendre(tester, 'assets/icon_foreground.png', 1024,
-        fond: false, part: 0.588, bras: _bras,
-        decalage: const Offset(1.3, -20.2));
-    for (final t in [192, 512]) {
-      await rendre(tester, 'web/icons/Icon-$t.png', t, fond: true, part: 0.82, bras: _bras);
-      // Maskable : contenu dans 80 % (~68 %).
-      await rendre(tester, 'web/icons/Icon-maskable-$t.png', t,
-          fond: true, part: 0.82, bras: _bras);
-    }
-    await rendre(tester, 'web/favicon.png', 48, fond: true, part: 0.95, bras: _bras);
-    for (final t in [512, 192, 48]) {
-      await rendre(tester, 'captures/_apercu_$t.png', t, fond: true, part: 0.82, bras: _bras);
-    }
   });
 }
