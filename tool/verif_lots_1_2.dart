@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:myapp/logic/accueil_logic.dart';
 import 'package:myapp/logic/lecon_json_logic.dart';
+import 'package:myapp/logic/memoire.dart';
 import 'package:myapp/logic/trophees_logic.dart';
 import 'package:myapp/models/lesson_model.dart';
 import 'package:myapp/services/gemini_lecon_service.dart';
@@ -70,7 +71,7 @@ Future<void> main() async {
   final roundTripSans = LessonModel.fromJson(mapSans);
   assert(roundTripSans.succes == null);
 
-  // 2. separerBadgeSucces & galerieBadgesLecons (0, 2 et 3 étoiles).
+  // 2. separerBadgeSucces, choisirCleIconeBadge & galerieBadgesLecons (niveaux).
   final s1 = separerBadgeSucces('🦉 Dompteur de Hiboux', 'Pluriel');
   assert(s1.emoji == '🦉' && s1.nom == 'Dompteur de Hiboux');
   final s2 = separerBadgeSucces('As du Calcul', 'Calcul');
@@ -78,20 +79,71 @@ Future<void> main() async {
   final s3 = separerBadgeSucces(null, 'Les Fractions');
   assert(s3.emoji == '🏅' && s3.nom == 'Champion · Les Fractions');
 
-  final refA = const LeconRef('Maths', avecSucces);
+  assert(choisirCleIconeBadge('Dompteur de Hiboux', 'Pluriel', 'Français') == 'hibou');
+  assert(choisirCleIconeBadge('Architecte des Nombres', 'Multiplications', 'Maths') == 'compas');
+  assert(choisirCleIconeBadge('Pilote de Fusée', 'Espace', 'Sciences') == 'fusee');
+  assert(choisirCleIconeBadge('As de la Plume', 'Accords', 'Français') == 'plume');
+
+  const lecon4Q = LessonModel(
+    titre: 'Multiplications',
+    succes: '🧮 Architecte des Nombres',
+    astuces: [
+      FlashcardModel(question: 'Q1', reponse: 'R1'),
+      FlashcardModel(question: 'Q2', reponse: 'R2'),
+    ],
+    exercices: [
+      ExerciseModel(question: 'E1', consigne: 'C', astuceErreur: 'A'),
+      ExerciseModel(question: 'E2', consigne: 'C', astuceErreur: 'A'),
+    ],
+    quiz: [],
+  );
+  const refA = LeconRef('Maths', lecon4Q);
   final refB = const LeconRef('Français', sansSucces);
   final galerie = galerieBadgesLecons(
     [refA, refB],
     (t) => t == 'Multiplications' ? [true, true, true] : [true, true, false],
   );
   assert(galerie.length == 2);
-  assert(galerie[0].debloque && galerie[0].etoiles == 3);
-  assert(galerie[0].emoji == '🧮' && galerie[0].nom == 'Architecte des Nombres');
-  assert(!galerie[1].debloque && galerie[1].etoiles == 2);
+  assert(galerie[0].debloque && galerie[0].niveau == NiveauBadge.bronze);
+  assert(galerie[0].cleIcone == 'compas' && galerie[0].nom == 'Architecte des Nombres');
+  assert(!galerie[1].debloque && galerie[1].niveau == NiveauBadge.verrouille && galerie[1].etoiles == 2);
   assert(galerie[1].nom == 'Champion · Ancienne leçon');
 
   final galerie0 = galerieBadgesLecons([refA], (_) => [false, false, false]);
-  assert(!galerie0.first.debloque && galerie0.first.etoiles == 0);
+  assert(!galerie0.first.debloque && galerie0.first.niveau == NiveauBadge.verrouille);
+
+  // Évolution Bronze -> Argent -> Or -> Diamant via Memoire.
+  final refs4 = questionsDeLecon(lecon4Q);
+  final memArgent = Memoire(
+    etats: {
+      refs4[0].cle: const EtatQuestion(boite: 2, retour: '2026-11-20'),
+      refs4[1].cle: const EtatQuestion(boite: 2, retour: '2026-11-20'),
+    },
+  );
+  assert(
+    badgePourLecon(refA, [true, true, true], memoire: memArgent).niveau ==
+        NiveauBadge.argent,
+  );
+  final memOr = Memoire(
+    etats: {
+      refs4[0].cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+      refs4[1].cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+    },
+  );
+  assert(
+    badgePourLecon(refA, [true, true, true], memoire: memOr).niveau ==
+        NiveauBadge.or,
+  );
+  final memDiamant = Memoire(
+    etats: {
+      for (final r in refs4)
+        r.cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+    },
+  );
+  assert(
+    badgePourLecon(refA, [true, true, true], memoire: memDiamant).niveau ==
+        NiveauBadge.diamant,
+  );
 
   // 3. nettoyerJsonLecon et analyserJsonLecon.
   final brut = 'Blabla\n```json\n${_jsonExemple()}\n```\nFin';

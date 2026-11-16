@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myapp/logic/accueil_logic.dart';
+import 'package:myapp/logic/memoire.dart';
 import 'package:myapp/logic/trophees_logic.dart';
 import 'package:myapp/models/lesson_model.dart';
 import 'package:myapp/theme.dart';
@@ -104,29 +105,88 @@ void main() {
       expect(vide.nom, 'Champion · Les Fractions');
     });
 
-    test('badgePourLecon se débloque uniquement à 3 étoiles', () {
-      const ref = LeconRef(
-        'Français',
-        LessonModel(
-          titre: 'Pluriel en -OU',
-          succes: '🦉 Dompteur de Hiboux',
-          astuces: [],
-          exercices: [],
-          quiz: [],
-        ),
+    test('badgePourLecon : verrouillé -> bronze -> argent -> or -> diamant', () {
+      final l = LessonModel(
+        titre: 'Pluriel en -OU',
+        succes: '🦉 Dompteur de Hiboux',
+        astuces: const [
+          FlashcardModel(question: 'Q1', reponse: 'R1'),
+          FlashcardModel(question: 'Q2', reponse: 'R2'),
+        ],
+        exercices: const [
+          ExerciseModel(
+            question: 'Ex1',
+            consigne: 'C',
+            astuceErreur: 'A',
+          ),
+          ExerciseModel(
+            question: 'Ex2',
+            consigne: 'C',
+            astuceErreur: 'A',
+          ),
+        ],
+        quiz: const [],
       );
+      final ref = LeconRef('Français', l);
+      final refs = questionsDeLecon(l);
+
+      // Moins de 3 étoiles -> verrouillé.
       final b2 = badgePourLecon(ref, [true, true, false]);
       expect(b2.debloque, isFalse);
+      expect(b2.niveau, NiveauBadge.verrouille);
       expect(b2.etoiles, 2);
+      expect(b2.cleIcone, 'hibou');
 
+      // 3 étoiles sans révision -> Bronze.
       final b3 = badgePourLecon(ref, [true, true, true]);
       expect(b3.debloque, isTrue);
-      expect(b3.etoiles, 3);
-      expect(b3.emoji, '🦉');
-      expect(b3.nom, 'Dompteur de Hiboux');
+      expect(b3.niveau, NiveauBadge.bronze);
+
+      // 2 questions sur 4 en boîte 2 (>= 50 %) -> Argent.
+      final memArgent = Memoire(
+        etats: {
+          refs[0].cle: const EtatQuestion(boite: 2, retour: '2026-11-20'),
+          refs[1].cle: const EtatQuestion(boite: 2, retour: '2026-11-20'),
+        },
+      );
+      expect(
+        badgePourLecon(ref, [true, true, true], memoire: memArgent).niveau,
+        NiveauBadge.argent,
+      );
+
+      // 2 questions sur 4 en boîte 3 (>= 50 %) -> Or.
+      final memOr = Memoire(
+        etats: {
+          refs[0].cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+          refs[1].cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+        },
+      );
+      expect(
+        badgePourLecon(ref, [true, true, true], memoire: memOr).niveau,
+        NiveauBadge.or,
+      );
+
+      // 4 questions sur 4 en boîte 3 (>= 85 %) -> Diamant.
+      final memDiamant = Memoire(
+        etats: {
+          for (final r in refs)
+            r.cle: const EtatQuestion(boite: 3, retour: '2026-11-22'),
+        },
+      );
+      expect(
+        badgePourLecon(ref, [true, true, true], memoire: memDiamant).niveau,
+        NiveauBadge.diamant,
+      );
     });
 
-    testWidgets('affiche la grille des badges dans TropheesView', (
+    test('choisirCleIconeBadge change selon le thème du badge', () {
+      expect(choisirCleIconeBadge('Dompteur de Hiboux', 'Pluriel', 'Français'), 'hibou');
+      expect(choisirCleIconeBadge('Architecte des Nombres', 'Multiplications', 'Maths'), 'compas');
+      expect(choisirCleIconeBadge('Pilote de Fusée', 'Espace', 'Sciences'), 'fusee');
+      expect(choisirCleIconeBadge('As de la Plume', 'Accords', 'Français'), 'plume');
+    });
+
+    testWidgets('affiche la grille des badges ronds dans TropheesView', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -148,15 +208,19 @@ void main() {
                   matiere: 'Français',
                   emoji: '🦉',
                   nom: 'Dompteur de Hiboux',
-                  debloque: true,
+                  cleIcone: 'hibou',
+                  niveau: NiveauBadge.or,
                   etoiles: 3,
+                  partRevues: 0.75,
+                  maitrise: 0.6,
                 ),
                 BadgeLecon(
                   titreLecon: 'Multiplications',
                   matiere: 'Mathématiques',
                   emoji: '🧮',
                   nom: 'Architecte des Nombres',
-                  debloque: false,
+                  cleIcone: 'compas',
+                  niveau: NiveauBadge.verrouille,
                   etoiles: 1,
                 ),
               ],
@@ -169,8 +233,8 @@ void main() {
       expect(find.text('1/2'), findsOneWidget);
       expect(find.text('Dompteur de Hiboux'), findsOneWidget);
       expect(find.text('Architecte des Nombres'), findsOneWidget);
-      expect(find.text('⭐⭐⭐ Débloqué !'), findsOneWidget);
-      expect(find.text('⭐ 1/3'), findsOneWidget);
+      expect(find.text('Niv. 3 · Or'), findsOneWidget);
+      expect(find.text('🔒 1/3 ⭐'), findsOneWidget);
     });
   });
 }

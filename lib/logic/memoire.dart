@@ -325,13 +325,17 @@ class Memoire {
   int nombreDues(Iterable<RefQuestion> refs) =>
       dues(refs, max: 1 << 30).length;
 
-  /// Part (0 à 1) des questions de [refs] en boîte >= [kBoiteMaitrisee].
-  double maitrise(Iterable<RefQuestion> refs) {
+  /// Part (0 à 1) des questions de [refs] qui sont dans une boîte >= [boiteMin].
+  double partEnBoiteAuMoins(Iterable<RefQuestion> refs, int boiteMin) {
     final cles = {for (final r in refs) r.cle};
     if (cles.isEmpty) return 0;
-    final ok = cles.where((c) => (_etats[c]?.boite ?? 0) >= kBoiteMaitrisee);
+    final ok = cles.where((c) => (_etats[c]?.boite ?? 0) >= boiteMin);
     return ok.length / cles.length;
   }
+
+  /// Part (0 à 1) des questions de [refs] en boîte >= [kBoiteMaitrisee].
+  double maitrise(Iterable<RefQuestion> refs) =>
+      partEnBoiteAuMoins(refs, kBoiteMaitrisee);
 
   /// Nombre de questions de [refs] suivies (déjà répondues au moins une fois).
   int nombreSuiviesParmi(Iterable<RefQuestion> refs) =>

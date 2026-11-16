@@ -213,9 +213,13 @@ class _HomeScreenState extends State<HomeScreen> {
         if (nombreEtapesFaites(etoilesLecon) >= 3) {
           final match = _toutes.where((r) => r.lecon.titre == lessonTitle);
           if (match.isNotEmpty) {
-            final badge = badgePourLecon(match.first, etoilesLecon);
+            final badge = badgePourLecon(
+              match.first,
+              etoilesLecon,
+              memoire: _memoire,
+            );
             annonce =
-                "⭐ 3 étoiles ! Badge débloqué : ${badge.emoji} ${badge.nom} (+5 💎)";
+                '⭐ 3 étoiles ! Badge Niveau ${badge.niveau.rang} (${badge.niveau.libelle}) débloqué : ${badge.nom} (+5 💎)';
           }
         }
         ScaffoldMessenger.of(context).showSnackBar(
@@ -577,6 +581,11 @@ class _HomeScreenState extends State<HomeScreen> {
           etoilesDe: _etoilesDe,
           maitriseDe: (r) => _memoire.maitrise(questionsDeLecon(r.lecon)),
           nbARevoirDe: (r) => nbARevoirLecon(_memoire, r.lecon),
+          badgeDe: (r) => badgePourLecon(
+            r,
+            _etoilesDe(r.lecon.titre),
+            memoire: _memoire,
+          ),
           onOuvrir: _ouvrirHub,
           onAjouter: _ajouterLecon,
           onParent: _ouvrirParent,
@@ -591,7 +600,11 @@ class _HomeScreenState extends State<HomeScreen> {
               for (final r in toutes) _etoilesDe(r.lecon.titre),
             ],
           ),
-          badgesLecons: galerieBadgesLecons(toutes, _etoilesDe),
+          badgesLecons: galerieBadgesLecons(
+            toutes,
+            _etoilesDe,
+            memoire: _memoire,
+          ),
         );
     }
   }

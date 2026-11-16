@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../logic/accueil_logic.dart';
+import '../logic/trophees_logic.dart';
 import '../theme.dart';
+import '../widgets/badge_rond.dart';
 
 /// Liste de toutes les leçons, avec filtre par matière.
 class LeconsView extends StatelessWidget {
@@ -12,6 +14,7 @@ class LeconsView extends StatelessWidget {
   final List<bool> Function(String titre) etoilesDe;
   final double Function(LeconRef) maitriseDe;
   final int Function(LeconRef) nbARevoirDe;
+  final BadgeLecon Function(LeconRef)? badgeDe;
 
   final ValueChanged<LeconRef> onOuvrir;
   final VoidCallback onAjouter;
@@ -25,6 +28,7 @@ class LeconsView extends StatelessWidget {
     required this.etoilesDe,
     required this.maitriseDe,
     required this.nbARevoirDe,
+    this.badgeDe,
     required this.onOuvrir,
     required this.onAjouter,
     required this.onParent,
@@ -103,6 +107,9 @@ class LeconsView extends StatelessWidget {
             etoiles: etoilesDe(r.lecon.titre),
             maitrise: maitriseDe(r),
             nbARevoir: nbARevoirDe(r),
+            badge: (badgeDe != null)
+                ? badgeDe!(r)
+                : badgePourLecon(r, etoilesDe(r.lecon.titre)),
             onTap: () => onOuvrir(r),
           ),
       ],
@@ -115,6 +122,7 @@ class _LigneLecon extends StatelessWidget {
   final List<bool> etoiles;
   final double maitrise;
   final int nbARevoir;
+  final BadgeLecon badge;
   final VoidCallback onTap;
 
   const _LigneLecon({
@@ -122,6 +130,7 @@ class _LigneLecon extends StatelessWidget {
     required this.etoiles,
     required this.maitrise,
     required this.nbARevoir,
+    required this.badge,
     required this.onTap,
   });
 
@@ -144,14 +153,32 @@ class _LigneLecon extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      BadgeRond(
+                        diametre: 40,
+                        cleIcone: badge.cleIcone,
+                        niveau: badge.niveau,
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          ref.lecon.titre,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: LaboPalette.ink,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ref.lecon.titre,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: LaboPalette.ink,
+                              ),
+                            ),
+                            Text(
+                              ref.matiere,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: LaboPalette.muted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Text(
@@ -159,13 +186,6 @@ class _LigneLecon extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
-                  ),
-                  Text(
-                    ref.matiere,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: LaboPalette.muted,
-                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(

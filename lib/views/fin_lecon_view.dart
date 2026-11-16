@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../logic/parcours_logic.dart';
+import '../logic/trophees_logic.dart';
 import '../theme.dart';
+import '../widgets/badge_rond.dart';
 
 /// Écran de récap : fin de leçon (3 étapes) ou fin d'une étape isolée.
 class FinLeconView extends StatelessWidget {
@@ -75,27 +77,46 @@ class FinLeconView extends StatelessWidget {
                 succesLecon != null &&
                 succesLecon!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: LaboPalette.or, width: 2),
-                ),
-                child: Text(
-                  "🏅 Badge débloqué : ${succesLecon!.trim()}",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: LaboPalette.ink,
-                  ),
-                ),
+              Builder(
+                builder: (_) {
+                  final s = separerBadgeSucces(succesLecon, '');
+                  final cle = choisirCleIconeBadge(s.nom, '', '');
+                  final style = styleNiveauBadge(NiveauBadge.bronze);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: style.anneau.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: style.degrade.last.withValues(alpha: 0.6),
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        BadgeRond(
+                          diametre: 44,
+                          cleIcone: cle,
+                          niveau: NiveauBadge.bronze,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Badge débloqué : ${s.nom}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: LaboPalette.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
             const SizedBox(height: 10),

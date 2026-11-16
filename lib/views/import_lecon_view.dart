@@ -9,6 +9,7 @@ import '../services/gemini_key_store.dart';
 import '../services/gemini_lecon_service.dart';
 import '../services/ouvrir_lien.dart';
 import '../theme.dart';
+import '../widgets/badge_rond.dart';
 import '../widgets/dialogue_cle_gemini.dart';
 
 /// Import d'une leçon : création directe depuis une photo (Gemini sur Android
@@ -596,21 +597,16 @@ class _CarteApercuLecon extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      border: Border.all(color: LaboPalette.or),
+                  BadgeRond(
+                    diametre: 42,
+                    cleIcone: choisirCleIconeBadge(
+                      badge.nom,
+                      l.titre,
+                      apercu.matiere,
                     ),
-                    child: Text(
-                      badge.emoji,
-                      style: const TextStyle(fontSize: 16),
-                    ),
+                    niveau: NiveauBadge.or,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       badge.nom,

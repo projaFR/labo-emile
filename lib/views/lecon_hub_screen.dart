@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../logic/accueil_logic.dart';
+import '../logic/memoire.dart';
 import '../logic/parcours_logic.dart';
 import '../logic/trophees_logic.dart';
+import '../services/memoire_service.dart';
 import '../theme.dart';
+import '../widgets/badge_rond.dart';
 
 /// Page d'une leçon : titre, maîtrise, les 3 étapes en grosses cartes et le
 /// bouton « Faire toute la leçon ».
@@ -15,6 +18,7 @@ class LeconHubScreen extends StatefulWidget {
   /// Lance un parcours : [etapes] = étapes jouées, [complet] = toute la leçon.
   final Future<void> Function(List<int> etapes, {required bool complet})
   lancer;
+  final Memoire? memoire;
 
   const LeconHubScreen({
     super.key,
@@ -23,6 +27,7 @@ class LeconHubScreen extends StatefulWidget {
     required this.maitrise,
     required this.nbARevoir,
     required this.lancer,
+    this.memoire,
   });
 
   @override
@@ -45,7 +50,11 @@ class _LeconHubScreenState extends State<LeconHubScreen> {
     final etoiles = widget.etoiles();
     final pct = (widget.maitrise() * 100).round();
     final aRevoir = widget.nbARevoir();
-    final badge = badgePourLecon(widget.lecon, etoiles);
+    final badge = badgePourLecon(
+      widget.lecon,
+      etoiles,
+      memoire: widget.memoire ?? MemoireService().memoire,
+    );
     return Scaffold(
       backgroundColor: LaboPalette.paper,
       appBar: AppBar(
@@ -264,60 +273,23 @@ class _BandeauBadgeLecon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final debloque = badge.debloque;
+    final style = styleNiveauBadge(badge.niveau);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        gradient: debloque
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
-              )
-            : null,
-        color: debloque ? null : Colors.grey.shade100,
+        color: debloque ? style.anneau.withValues(alpha: 0.35) : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: debloque ? LaboPalette.or : LaboPalette.line,
+          color: debloque ? style.degrade.last.withValues(alpha: 0.5) : LaboPalette.line,
           width: debloque ? 2 : 1.5,
         ),
       ),
       child: Row(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: debloque ? Colors.white : Colors.grey.shade200,
-                  border: Border.all(
-                    color: debloque ? LaboPalette.or : Colors.grey.shade400,
-                    width: 2,
-                  ),
-                ),
-                child: Opacity(
-                  opacity: debloque ? 1.0 : 0.5,
-                  child: Text(badge.emoji, style: const TextStyle(fontSize: 24)),
-                ),
-              ),
-              if (!debloque)
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade700,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.5),
-                    ),
-                    child: const Icon(Icons.lock, size: 10, color: Colors.white),
-                  ),
-                ),
-            ],
+          BadgeRond(
+            diametre: 52,
+            cleIcone: badge.cleIcone,
+            niveau: badge.niveau,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -326,14 +298,12 @@ class _BandeauBadgeLecon extends StatelessWidget {
               children: [
                 Text(
                   debloque
-                      ? "🏅 Badge débloqué !"
-                      : "🔒 Badge à gagner (3 ⭐)",
+                      ? 'Badge · Niveau ${badge.niveau.rang} (${badge.niveau.libelle})'
+                      : '🔒 Badge à débloquer',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: debloque
-                        ? Colors.amber.shade900
-                        : LaboPalette.muted,
+                    color: debloque ? style.pastille : LaboPalette.muted,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -343,6 +313,14 @@ class _BandeauBadgeLecon extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
                     color: debloque ? LaboPalette.ink : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  conseilProchainNiveau(badge),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: LaboPalette.muted,
                   ),
                 ),
               ],

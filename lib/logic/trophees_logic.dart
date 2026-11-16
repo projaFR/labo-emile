@@ -1,4 +1,5 @@
 import 'accueil_logic.dart';
+import 'memoire.dart';
 
 /// Logique pure de la page Trophées (aucune dépendance à Flutter).
 
@@ -94,23 +95,170 @@ StatsTrophees calculerStats({
   );
 }
 
-/// Un badge de succès attaché à une leçon (débloqué à 3 étoiles).
+/// Paliers d'évolution d'un badge de leçon.
+enum NiveauBadge {
+  verrouille(0, 'Verrouillé'),
+  bronze(1, 'Bronze'),
+  argent(2, 'Argent'),
+  or(3, 'Or'),
+  diamant(4, 'Diamant');
+
+  final int rang;
+  final String libelle;
+  const NiveauBadge(this.rang, this.libelle);
+}
+
+/// Calcule le niveau d'un badge de leçon :
+/// - Verrouillé : moins de 3 étoiles sur la leçon
+/// - Bronze (niv. 1) : les 3 étoiles obtenues
+/// - Argent (niv. 2) : 3 étoiles + au moins 50 % des questions revues un autre jour (boîte >= 2)
+/// - Or (niv. 3) : 3 étoiles + au moins 50 % des questions maîtrisées (boîte >= 3)
+/// - Diamant (niv. 4) : 3 étoiles + au moins 85 % des questions maîtrisées (boîte >= 3)
+NiveauBadge calculerNiveauBadge({
+  required int etoiles,
+  required double partRevues,
+  required double maitrise,
+}) {
+  if (etoiles < 3) return NiveauBadge.verrouille;
+  if (maitrise >= 0.85) return NiveauBadge.diamant;
+  if (maitrise >= 0.50) return NiveauBadge.or;
+  if (partRevues >= 0.50) return NiveauBadge.argent;
+  return NiveauBadge.bronze;
+}
+
+const List<String> _clesIconesBadge = [
+  'hibou',
+  'compas',
+  'calcul',
+  'fusee',
+  'eclair',
+  'bouclier',
+  'magie',
+  'couronne',
+  'plume',
+  'livre',
+  'science',
+  'cerveau',
+  'boussole',
+  'globe',
+  'sablier',
+  'chateau',
+  'langue',
+  'flamme',
+  'nature',
+  'bateau',
+  'ampoule',
+  'puzzle',
+  'cle',
+  'trophee',
+];
+
+const List<(String cle, List<String> racines)> _tableIconesBadge = [
+  ('hibou', ['hibou', 'oiseau', 'animal', 'renard', 'loup', 'chat']),
+  ('compas', ['architect', 'compas', 'geometr', 'triangle', 'angle', 'mesur']),
+  (
+    'calcul',
+    ['nombre', 'calcul', 'multipli', 'addition', 'table', 'fraction', 'divis'],
+  ),
+  ('fusee', ['fusee', 'pilote', 'espace', 'astre', 'planet']),
+  ('eclair', ['eclair', 'tonnerre', 'foudre', 'vitesse', 'chrono']),
+  ('bouclier', ['chevalier', 'bouclier', 'gardien', 'armure']),
+  ('magie', ['mage', 'magie', 'sorcier', 'enchante', 'baguette']),
+  ('couronne', ['roi', 'reine', 'couronne', 'empereur', 'prince']),
+  (
+    'plume',
+    [
+      'plume',
+      'orthograph',
+      'accord',
+      'pluriel',
+      'verbe',
+      'grammair',
+      'conjug',
+      'mot',
+      'lettre',
+    ],
+  ),
+  ('livre', ['livre', 'lectur', 'conte', 'recit']),
+  ('science', ['potion', 'scienc', 'chimi', 'atome', 'labo']),
+  ('cerveau', ['cerveau', 'genie', 'savant', 'memoire', 'esprit']),
+  ('boussole', ['explor', 'boussol', 'aventur', 'cap']),
+  ('globe', ['monde', 'terre', 'geograph', 'carte', 'continent']),
+  ('sablier', ['temps', 'siecle', 'passe', 'sablier', 'histoir']),
+  ('chateau', ['chateau', 'forteresse', 'tour']),
+  ('langue', ['anglais', 'langue', 'voix']),
+  ('flamme', ['dragon', 'feu', 'flamme', 'volcan']),
+  ('nature', ['foret', 'arbre', 'plante', 'natur', 'jardin']),
+  ('bateau', ['pirate', 'mer', 'ocean', 'bateau', 'marin', 'navir']),
+  ('ampoule', ['idee', 'astuce', 'lumier', 'inventeur']),
+  ('puzzle', ['enigme', 'detectiv', 'puzzle', 'logiqu']),
+  ('cle', ['secret', 'cle', 'tresor', 'coffre', 'code']),
+];
+
+String _sansAccents(String s) {
+  const de = 'àâäéèêëîïôöùûüçœæ';
+  const vers = 'aaaeeeeiioouuucoa';
+  final buf = StringBuffer();
+  for (final code in s.runes) {
+    final c = String.fromCharCode(code);
+    final i = de.indexOf(c);
+    buf.write(i >= 0 ? vers[i] : c);
+  }
+  return buf.toString();
+}
+
+/// Choisit une clé d'icône vectorielle en fonction du nom de badge et de la leçon.
+String choisirCleIconeBadge(
+  String nomBadge,
+  String titreLecon,
+  String matiere,
+) {
+  final texte = _sansAccents('$nomBadge $titreLecon'.toLowerCase());
+  final mots = [
+    for (final m in RegExp(r'[a-z]+').allMatches(texte)) m.group(0)!,
+  ];
+  for (final (cle, racines) in _tableIconesBadge) {
+    for (final mot in mots) {
+      for (final r in racines) {
+        if (r.length <= 4 ? mot == r || mot == '${r}s' || mot == '${r}x' : mot.startsWith(r)) {
+          return cle;
+        }
+      }
+    }
+  }
+  final cleTexte = '$nomBadge|$titreLecon|$matiere';
+  var somme = 0;
+  for (final c in cleTexte.codeUnits) {
+    somme = (somme * 31 + c) & 0x7FFFFFFF;
+  }
+  return _clesIconesBadge[somme % _clesIconesBadge.length];
+}
+
+/// Un badge de succès attaché à une leçon (évolue avec les 3 étoiles puis la mémoire).
 class BadgeLecon {
   final String titreLecon;
   final String matiere;
   final String emoji;
   final String nom;
-  final bool debloque;
+  final String cleIcone;
+  final NiveauBadge niveau;
   final int etoiles; // 0 à 3
+  final double partRevues; // 0.0 à 1.0 (boîte >= 2)
+  final double maitrise; // 0.0 à 1.0 (boîte >= 3)
 
   const BadgeLecon({
     required this.titreLecon,
     required this.matiere,
     required this.emoji,
     required this.nom,
-    required this.debloque,
+    required this.cleIcone,
+    required this.niveau,
     required this.etoiles,
+    this.partRevues = 0,
+    this.maitrise = 0,
   });
+
+  bool get debloque => niveau != NiveauBadge.verrouille;
 }
 
 /// Extrait l'emoji et le nom d'un succès de leçon, avec repli propre si absent.
@@ -129,23 +277,61 @@ class BadgeLecon {
   return (emoji: s.emoji, nom: s.nom.trim());
 }
 
-/// Construit le badge d'une leçon à partir de ses 3 étoiles.
-BadgeLecon badgePourLecon(LeconRef r, List<bool> etoiles) {
+/// Construit le badge d'une leçon à partir de ses 3 étoiles et de la mémoire.
+BadgeLecon badgePourLecon(
+  LeconRef r,
+  List<bool> etoiles, {
+  Memoire? memoire,
+}) {
   final nb = nombreEtapesFaites(etoiles);
   final s = separerBadgeSucces(r.lecon.succes, r.lecon.titre);
+  var partRevues = 0.0;
+  var maitrise = 0.0;
+  if (memoire != null) {
+    final refs = questionsDeLecon(r.lecon);
+    partRevues = memoire.partEnBoiteAuMoins(refs, 2);
+    maitrise = memoire.maitrise(refs);
+  }
+  final niveau = calculerNiveauBadge(
+    etoiles: nb,
+    partRevues: partRevues,
+    maitrise: maitrise,
+  );
   return BadgeLecon(
     titreLecon: r.lecon.titre,
     matiere: r.matiere,
     emoji: s.emoji,
     nom: s.nom,
-    debloque: nb >= 3,
+    cleIcone: choisirCleIconeBadge(s.nom, r.lecon.titre, r.matiere),
+    niveau: niveau,
     etoiles: nb,
+    partRevues: partRevues,
+    maitrise: maitrise,
   );
 }
 
 /// Galerie des badges de toutes les leçons.
 List<BadgeLecon> galerieBadgesLecons(
   List<LeconRef> lecons,
-  List<bool> Function(String titre) etoilesDe,
-) => [for (final r in lecons) badgePourLecon(r, etoilesDe(r.lecon.titre))];
+  List<bool> Function(String titre) etoilesDe, {
+  Memoire? memoire,
+}) => [
+  for (final r in lecons)
+    badgePourLecon(r, etoilesDe(r.lecon.titre), memoire: memoire),
+];
+
+/// Conseil court expliquant comment atteindre le palier suivant du badge.
+String conseilProchainNiveau(BadgeLecon b) => switch (b.niveau) {
+  NiveauBadge.verrouille =>
+    'Gagne les 3 étoiles de la leçon (${b.etoiles}/3) pour débloquer le niveau Bronze.',
+  NiveauBadge.bronze =>
+    'Revois la moitié des questions un autre jour pour passer Argent (${(b.partRevues * 100).round()} % / 50 %).',
+  NiveauBadge.argent =>
+    'Maîtrise la moitié des questions en révision pour passer Or (${(b.maitrise * 100).round()} % / 50 %).',
+  NiveauBadge.or =>
+    'Maîtrise 85 % des questions en révision pour atteindre Diamant (${(b.maitrise * 100).round()} % / 85 %).',
+  NiveauBadge.diamant =>
+    'Niveau maximum atteint ! Cette leçon est bien ancrée.',
+};
+
 
