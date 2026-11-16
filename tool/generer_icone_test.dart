@@ -34,6 +34,7 @@ void main() {
     required bool fond,
     required double part, // taille du widget relative au carré
     Color? bras,
+    Offset decalage = Offset.zero,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(px.toDouble(), px.toDouble());
@@ -47,7 +48,10 @@ void main() {
             height: px.toDouble(),
             decoration: fond ? const BoxDecoration(gradient: _degrade) : null,
             alignment: Alignment.center,
-            child: MicroscopeIcon(size: px * part, bras: bras),
+            child: Transform.translate(
+              offset: decalage,
+              child: MicroscopeIcon(size: px * part, bras: bras),
+            ),
           ),
         ),
       ),
@@ -66,9 +70,11 @@ void main() {
     addTearDown(tester.view.reset);
     // Le dessin occupe ~70 % de son carré.
     await rendre(tester, 'assets/icon.png', 1024, fond: true, part: 0.82, bras: _bras);
-    // Zone sûre adaptative Android : 66 % (silhouette ~83 % du widget : 0,70 x 0,83 = 58 %).
+    // Zone sûre adaptative Android : cercle de 60 % (rayon max 307 px, mesuré)
+    // ; le décalage recentre le dessin sur son cercle minimal. Ancien : 66 % (silhouette ~83 % du widget : 0,70 x 0,83 = 58 %).
     await rendre(tester, 'assets/icon_foreground.png', 1024,
-        fond: false, part: 0.70, bras: _bras);
+        fond: false, part: 0.588, bras: _bras,
+        decalage: const Offset(1.3, -20.2));
     for (final t in [192, 512]) {
       await rendre(tester, 'web/icons/Icon-$t.png', t, fond: true, part: 0.82, bras: _bras);
       // Maskable : contenu dans 80 % (~68 %).
