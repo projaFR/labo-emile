@@ -10,7 +10,7 @@ Cartable, ramenée à la teinte du Labo."""
 import math
 from pathlib import Path
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 R = Path(__file__).resolve().parent.parent
 N = 4.4          # exposant de la superellipse
@@ -44,10 +44,41 @@ def halo(px, cx, cy, rayon, intensite):
     return intensite * np.clip(1 - d, 0, 1) ** 2
 
 
+TRAIT_CHUTE_PX = 8       # hauteur de la chute du trait, en px sur une image 1024
+                         # (~0,8 % du carré ; mesuré sur Réviser/Cartable : pic
+                         # sur 1-2 px à 256, donc ~4-8 px à 1024)
+TRAIT_INTENSITE = 0.55   # poids max du mélange vers le blanc (pas une alpha,
+                         # juste un mélange de couleur ; calibré pour donner
+                         # un pic d'environ +60 à +80 par canal R/G/B, comme
+                         # mesuré sur Réviser/Cartable)
+
+
+def trait_lumiere(px):
+    """Fin trait de lumière quasi blanc, pleinement opaque, qui suit le bord
+    supérieur de la silhouette squircle (même exposant N que `masque`) et
+    s'estompe vite vers le bas (chute nette, pas un halo diffus). Renvoie un
+    masque d'intensité 0..1 en (px, px, 1)."""
+    k = px / 1024
+    chute = max(TRAIT_CHUTE_PX * k, 1e-6)
+    y, x = np.mgrid[0:px, 0:px].astype(float)
+    u = np.clip(np.abs((x + .5) / px * 2 - 1), 0, 1 - 1e-9)
+    v_haut = (1 - u ** N) ** (1 / N)              # bord haut du squircle, coord. [-1,1]
+    # -.5 : les pixels ont leur centre à y+.5 (même convention que `masque`)
+    y_haut = (1 - v_haut) / 2 * px - .5            # bord haut en pixels (0 = haut de l'image)
+    d = y - y_haut
+    m = np.clip(1 - d / chute, 0, 1) ** 2
+    m[d < 0] = 0
+    m_img = Image.fromarray((m * 255 + .5).astype(np.uint8), "L")
+    m_img = m_img.filter(ImageFilter.GaussianBlur(radius=max(0.8 * k, 0.3)))
+    return (np.asarray(m_img).astype(float) / 255)[..., None]
+
+
 def fond(px=1024):
     """Dégradé bleu (60°) + reflet net en haut à gauche + ombre en bas à
     droite, construits comme sur Réviser et Cartable (halo(250,160,760,.38)
-    et halo(900,980,620,.30) sur une image 1024, mis à l'échelle de `px`)."""
+    et halo(900,980,620,.30) sur une image 1024, mis à l'échelle de `px`),
+    plus un fin trait de lumière sur le bord supérieur de la forme (comme
+    mesuré sur les icônes compilées de Réviser et Cartable)."""
     k = px / 1024
     base = degrade_lineaire(px, HAUT, BAS, 60)
     lumiere = halo(px, 250 * k, 160 * k, 760 * k, 0.38)[..., None]
@@ -55,6 +86,8 @@ def fond(px=1024):
     blanc, ombre_c = np.array(BLANC) / 255, np.array(OMBRE) / 255
     out = base * (1 - lumiere) + blanc * lumiere
     out = out * (1 - ombre) + ombre_c * ombre
+    trait = trait_lumiere(px) * TRAIT_INTENSITE
+    out = out * (1 - trait) + blanc * trait
     return Image.fromarray((np.clip(out, 0, 1) * 255 + .5).astype(np.uint8), "RGB")
 
 
