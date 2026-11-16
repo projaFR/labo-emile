@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../logic/accueil_logic.dart';
 import '../logic/parcours_logic.dart';
+import '../logic/trophees_logic.dart';
 import '../theme.dart';
 
 /// Page d'une leçon : titre, maîtrise, les 3 étapes en grosses cartes et le
@@ -44,6 +45,7 @@ class _LeconHubScreenState extends State<LeconHubScreen> {
     final etoiles = widget.etoiles();
     final pct = (widget.maitrise() * 100).round();
     final aRevoir = widget.nbARevoir();
+    final badge = badgePourLecon(widget.lecon, etoiles);
     return Scaffold(
       backgroundColor: LaboPalette.paper,
       appBar: AppBar(
@@ -110,6 +112,8 @@ class _LeconHubScreenState extends State<LeconHubScreen> {
                   ),
                 ),
               ],
+              const SizedBox(height: 12),
+              _BandeauBadgeLecon(badge: badge),
               const SizedBox(height: 16),
               for (var i = 0; i < 3; i++)
                 _CarteEtape(
@@ -248,6 +252,103 @@ class _CarteEtape extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BandeauBadgeLecon extends StatelessWidget {
+  final BadgeLecon badge;
+  const _BandeauBadgeLecon({required this.badge});
+
+  @override
+  Widget build(BuildContext context) {
+    final debloque = badge.debloque;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: debloque
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+              )
+            : null,
+        color: debloque ? null : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: debloque ? LaboPalette.or : LaboPalette.line,
+          width: debloque ? 2 : 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: debloque ? Colors.white : Colors.grey.shade200,
+                  border: Border.all(
+                    color: debloque ? LaboPalette.or : Colors.grey.shade400,
+                    width: 2,
+                  ),
+                ),
+                child: Opacity(
+                  opacity: debloque ? 1.0 : 0.5,
+                  child: Text(badge.emoji, style: const TextStyle(fontSize: 24)),
+                ),
+              ),
+              if (!debloque)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade700,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: const Icon(Icons.lock, size: 10, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  debloque
+                      ? "🏅 Badge débloqué !"
+                      : "🔒 Badge à gagner (3 ⭐)",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: debloque
+                        ? Colors.amber.shade900
+                        : LaboPalette.muted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  badge.nom,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: debloque ? LaboPalette.ink : Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

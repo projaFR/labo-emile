@@ -5,6 +5,7 @@ class InitialDatabase {
     'Mathématiques': [
       LessonModel(
         titre: 'Stratégies Multiplications',
+        succes: '🧮 Architecte des Nombres',
         astuces: [
           const FlashcardModel(
             question: '14 x 4',
@@ -32,6 +33,7 @@ class InitialDatabase {
     'Français': [
       LessonModel(
         titre: 'Pluriel en -OU',
+        succes: '🦉 Dompteur de Hiboux à Genoux',
         astuces: [
           const FlashcardModel(
             question: 'Hibou',

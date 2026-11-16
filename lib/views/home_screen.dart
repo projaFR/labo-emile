@@ -208,11 +208,21 @@ class _HomeScreenState extends State<HomeScreen> {
         prefs.setInt('emile_diamonds', _totalDiamonds);
         SoundService().playStar();
         _confettiController.play();
+        final etoilesLecon = _lessonsRewards[lessonTitle]!;
+        String annonce = "⭐ Étoile débloquée pour « $lessonTitle » ! (+5 💎)";
+        if (nombreEtapesFaites(etoilesLecon) >= 3) {
+          final match = _toutes.where((r) => r.lecon.titre == lessonTitle);
+          if (match.isNotEmpty) {
+            final badge = badgePourLecon(match.first, etoilesLecon);
+            annonce =
+                "⭐ 3 étoiles ! Badge débloqué : ${badge.emoji} ${badge.nom} (+5 💎)";
+          }
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("⭐ Étoile débloquée pour « $lessonTitle » ! (+5 💎)"),
+            content: Text(annonce),
             backgroundColor: LaboPalette.warn,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -581,6 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
               for (final r in toutes) _etoilesDe(r.lecon.titre),
             ],
           ),
+          badgesLecons: galerieBadgesLecons(toutes, _etoilesDe),
         );
     }
   }

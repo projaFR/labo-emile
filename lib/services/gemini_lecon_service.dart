@@ -1,0 +1,299 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+
+import '../logic/lecon_json_logic.dart';
+
+/// Modèle Gemini gratuit et rapide adapté à la lecture de photos de cahiers.
+const String kModeleGeminiLecon = 'gemini-2.5-flash';
+
+/// Photo sélectionnée ou prise pour générer une leçon.
+class PhotoLecon {
+  final Uint8List octets;
+  final String mimeType;
+  final String nom;
+
+  const PhotoLecon({
+    required this.octets,
+    required this.mimeType,
+    required this.nom,
+  });
+}
+
+/// Erreur lisible en français lors de la génération d'une leçon avec Gemini.
+class ErreurGeminiLecon implements Exception {
+  final String message;
+
+  const ErreurGeminiLecon(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Consigne pédagogique complète donnée à Gemini pour fabriquer la leçon.
+const String kPromptSystemeGeminiLecon = '''
+Tu es un professeur des écoles bienveillant et rigoureux (cycle 2, niveau CE2, pour Émile, 8 ans).
+À partir de la ou des photos d'une leçon de classe, fabrique une leçon complète pour l'application « Le Labo d'Émile ».
+
+Règles strictes :
+1. Réponds UNIQUEMENT avec un objet JSON valide, sans texte ni commentaire autour.
+2. Champs attendus :
+   - "matiere" : une parmi ["Mathématiques", "Français", "Sciences", "Histoire", "Géographie", "Anglais"].
+   - "titre" : titre CLASSIQUE et scolaire de la leçon (ex : "Le pluriel des noms en -ou", "Multiplier par 10, 100, 1000").
+   - "succes" : 1 emoji suivi d'un espace puis d'un petit nom de badge RIGOLO et valorisant lié au thème de la leçon (ex : "🦉 Dompteur de Hiboux à Genoux", "🚀 Pilote des Grands Nombres").
+   - "astuces" : liste de 3 à 8 cartes {"question": "...", "reponse": "..."} résumant les règles et exemples de la feuille avec les mots exacts enseignés en classe.
+   - "exercices" : liste de 12 à 18 exercices de difficulté progressive (découverte, entraînement, défi), tous reliés aux notions de la leçon :
+       * Pour une réponse numérique / calcul :
+         - mets un ou plusieurs "[?]" dans "question",
+         - laisse "options" vide ("options": []),
+         - s'il y a 1 seul "[?]", remplis "reponseAttendue" (nombre sans espaces, ex : "1000"),
+         - s'il y a 2 "[?]" ou plus, remplis "reponsesMultiples" avec autant d'éléments exacts que de "[?]".
+       * Pour un mot, une règle ou du français (QCM) :
+         - mets 0 ou 1 "[?]" dans "question",
+         - fournis exactement 4 "options",
+         - mets dans "reponseAttendue" la copie exacte de la bonne option.
+         - INTERDIT d'inventer des mots mal orthographiés dans les options (utilise d'autres vrais mots français ou des erreurs de règle plausibles).
+       * Champs de chaque exercice : "question", "consigne", "reponseAttendue", "reponsesMultiples", "options", "astuceErreur".
+       * "astuceErreur" : indice court (moins de 15 mots) qui aide à réfléchir sans jamais donner la réponse.
+   - "quiz" : liste de 5 à 10 questions courtes (lisibles en moins de 5 s) pour le Défi Chrono :
+       {"question": "...", "options": ["...", "...", "...", "..."], "indexCorrect": 0} (indexCorrect entre 0 et 3).
+''';
+
+/// Envoie les [photos] à Gemini et renvoie la leçon validée prête à importer.
+Future<LeconImportee> genererLeconDepuisPhotos({
+  required String apiKey,
+  required List<PhotoLecon> photos,
+  String commentaireParent = '',
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 60),
+}) async {
+  final cle = apiKey.trim();
+  if (cle.isEmpty) {
+    throw const ErreurGeminiLecon(
+      "Configure d'abord ta clé Gemini gratuite.",
+    );
+  }
+  if (photos.isEmpty) {
+    throw const ErreurGeminiLecon(
+      'Ajoute au moins une photo de la leçon.',
+    );
+  }
+
+  final c = client ?? http.Client();
+  final doitFermer = client == null;
+  try {
+    final uri = Uri.https(
+      'generativelanguage.googleapis.com',
+      '/v1beta/models/$kModeleGeminiLecon:generateContent',
+    );
+    final precision = commentaireParent.trim();
+    final consigne = precision.isEmpty
+        ? 'Crée la leçon complète au format JSON à partir de ces photos.'
+        : 'Crée la leçon complète au format JSON à partir de ces photos.\n'
+            'Précision du parent : $precision';
+
+    final parts = <Map<String, dynamic>>[
+      for (final p in photos)
+        {
+          'inlineData': {
+            'mimeType': p.mimeType,
+            'data': base64Encode(p.octets),
+          },
+        },
+      {'text': consigne},
+    ];
+
+    final contents = <Map<String, dynamic>>[
+      {'role': 'user', 'parts': parts},
+    ];
+
+    final texte = await _appelerGemini(
+      client: c,
+      uri: uri,
+      apiKey: cle,
+      contents: contents,
+      timeout: timeout,
+    );
+
+    try {
+      return analyserJsonLecon(texte);
+    } on FormatException catch (e) {
+      // Un seul essai de correction automatique si le format JSON présente une anomalie.
+      final correctionContents = <Map<String, dynamic>>[
+        ...contents,
+        {
+          'role': 'model',
+          'parts': [
+            {'text': texte},
+          ],
+        },
+        {
+          'role': 'user',
+          'parts': [
+            {
+              'text':
+                  'Ta réponse JSON ne passe pas le contrôle technique (${e.message}). '
+                  'Corrige uniquement le format et renvoie uniquement le JSON complet valide.',
+            },
+          ],
+        },
+      ];
+      final texteCorrige = await _appelerGemini(
+        client: c,
+        uri: uri,
+        apiKey: cle,
+        contents: correctionContents,
+        timeout: timeout,
+      );
+      try {
+        return analyserJsonLecon(texteCorrige);
+      } on FormatException catch (e2) {
+        throw ErreurGeminiLecon(
+          'Gemini a répondu un format invalide : ${e2.message}',
+        );
+      }
+    }
+  } finally {
+    if (doitFermer) c.close();
+  }
+}
+
+Future<String> _appelerGemini({
+  required http.Client client,
+  required Uri uri,
+  required String apiKey,
+  required List<Map<String, dynamic>> contents,
+  required Duration timeout,
+}) async {
+  final corps = jsonEncode({
+    'systemInstruction': {
+      'parts': [
+        {'text': kPromptSystemeGeminiLecon},
+      ],
+    },
+    'contents': contents,
+    'generationConfig': {
+      'responseMimeType': 'application/json',
+      'temperature': 0.3,
+    },
+  });
+
+  final http.Response res;
+  try {
+    res = await client
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: corps,
+        )
+        .timeout(timeout);
+  } on TimeoutException {
+    throw const ErreurGeminiLecon(
+      'Gemini a mis trop de temps à répondre. Réessaie dans un instant.',
+    );
+  } catch (_) {
+    throw const ErreurGeminiLecon(
+      'Impossible de joindre Gemini. Vérifie la connexion internet.',
+    );
+  }
+
+  if (res.statusCode == 400 ||
+      res.statusCode == 401 ||
+      res.statusCode == 403) {
+    throw const ErreurGeminiLecon(
+      'Clé Gemini refusée. Vérifie ta clé dans l’Espace Parent.',
+    );
+  }
+  if (res.statusCode == 429) {
+    throw const ErreurGeminiLecon(
+      'Limite gratuite Gemini atteinte pour l’instant. Réessaie dans une minute.',
+    );
+  }
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    throw ErreurGeminiLecon(
+      'Gemini a renvoyé une erreur (code ${res.statusCode}). Réessaie.',
+    );
+  }
+
+  try {
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final candidates = json['candidates'] as List?;
+    if (candidates == null || candidates.isEmpty) {
+      throw const ErreurGeminiLecon(
+        'Gemini n’a retourné aucune leçon. Essaie avec une photo plus nette.',
+      );
+    }
+    final first = candidates.first as Map<String, dynamic>;
+    final content = first['content'] as Map<String, dynamic>?;
+    final parts = content?['parts'] as List?;
+    if (parts == null || parts.isEmpty) {
+      throw const ErreurGeminiLecon(
+        'Réponse Gemini vide. Essaie avec une photo plus nette.',
+      );
+    }
+    final buffer = StringBuffer();
+    for (final part in parts) {
+      if (part is Map && part['text'] is String) {
+        buffer.write(part['text'] as String);
+      }
+    }
+    final texte = buffer.toString().trim();
+    if (texte.isEmpty) {
+      throw const ErreurGeminiLecon(
+        'Réponse Gemini vide. Essaie avec une photo plus nette.',
+      );
+    }
+    return texte;
+  } on ErreurGeminiLecon {
+    rethrow;
+  } catch (_) {
+    throw const ErreurGeminiLecon(
+      'Réponse de Gemini illisible. Réessaie.',
+    );
+  }
+}
+
+/// Détecte le type MIME d'une image d'après ses premiers octets ou son nom.
+String detecterMimeType(String nom, List<int> octets) {
+  if (octets.length >= 3 &&
+      octets[0] == 0xFF &&
+      octets[1] == 0xD8 &&
+      octets[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (octets.length >= 4 &&
+      octets[0] == 0x89 &&
+      octets[1] == 0x50 &&
+      octets[2] == 0x4E &&
+      octets[3] == 0x47) {
+    return 'image/png';
+  }
+  if (octets.length >= 12 &&
+      octets[0] == 0x52 &&
+      octets[1] == 0x49 &&
+      octets[2] == 0x46 &&
+      octets[3] == 0x46 &&
+      octets[8] == 0x57 &&
+      octets[9] == 0x45 &&
+      octets[10] == 0x42 &&
+      octets[11] == 0x50) {
+    return 'image/webp';
+  }
+  final bas = nom.toLowerCase();
+  if (bas.endsWith('.png')) return 'image/png';
+  if (bas.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+/// Version masquée affichable à l'écran sans exposer le secret.
+String masquerCleGemini(String? cle) {
+  final propre = cle?.trim() ?? '';
+  if (propre.isEmpty) return 'Aucune clé configurée';
+  if (propre.length < 6) return 'Clé configurée';
+  return 'Clé configurée (••••${propre.substring(propre.length - 4)})';
+}

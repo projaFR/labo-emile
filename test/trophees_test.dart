@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:myapp/logic/accueil_logic.dart';
 import 'package:myapp/logic/trophees_logic.dart';
+import 'package:myapp/models/lesson_model.dart';
 import 'package:myapp/theme.dart';
 import 'package:myapp/views/trophees_view.dart';
 
@@ -85,5 +87,90 @@ void main() {
     );
     expect(find.text('0/1'), findsOneWidget);
     expect(find.text('Titre mystère'), findsWidgets);
+  });
+
+  group('badges de succès des leçons', () {
+    test('separerBadgeSucces avec emoji, sans emoji et absent', () {
+      final avec = separerBadgeSucces('🦉 Dompteur de Hiboux', 'Pluriel');
+      expect(avec.emoji, '🦉');
+      expect(avec.nom, 'Dompteur de Hiboux');
+
+      final sansEmoji = separerBadgeSucces('As du Calcul', 'Calcul');
+      expect(sansEmoji.emoji, '🏅');
+      expect(sansEmoji.nom, 'As du Calcul');
+
+      final vide = separerBadgeSucces(null, 'Les Fractions');
+      expect(vide.emoji, '🏅');
+      expect(vide.nom, 'Champion · Les Fractions');
+    });
+
+    test('badgePourLecon se débloque uniquement à 3 étoiles', () {
+      const ref = LeconRef(
+        'Français',
+        LessonModel(
+          titre: 'Pluriel en -OU',
+          succes: '🦉 Dompteur de Hiboux',
+          astuces: [],
+          exercices: [],
+          quiz: [],
+        ),
+      );
+      final b2 = badgePourLecon(ref, [true, true, false]);
+      expect(b2.debloque, isFalse);
+      expect(b2.etoiles, 2);
+
+      final b3 = badgePourLecon(ref, [true, true, true]);
+      expect(b3.debloque, isTrue);
+      expect(b3.etoiles, 3);
+      expect(b3.emoji, '🦉');
+      expect(b3.nom, 'Dompteur de Hiboux');
+    });
+
+    testWidgets('affiche la grille des badges dans TropheesView', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(LaboColors.light),
+          home: Scaffold(
+            body: TropheesView(
+              stats: calculerStats(
+                diamants: 15,
+                combo: 0,
+                etoilesParLecon: const [
+                  [true, true, true],
+                  [true, false, false],
+                ],
+              ),
+              badgesLecons: const [
+                BadgeLecon(
+                  titreLecon: 'Pluriel en -OU',
+                  matiere: 'Français',
+                  emoji: '🦉',
+                  nom: 'Dompteur de Hiboux',
+                  debloque: true,
+                  etoiles: 3,
+                ),
+                BadgeLecon(
+                  titreLecon: 'Multiplications',
+                  matiere: 'Mathématiques',
+                  emoji: '🧮',
+                  nom: 'Architecte des Nombres',
+                  debloque: false,
+                  etoiles: 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Mes badges de leçons'), findsOneWidget);
+      expect(find.text('1/2'), findsOneWidget);
+      expect(find.text('Dompteur de Hiboux'), findsOneWidget);
+      expect(find.text('Architecte des Nombres'), findsOneWidget);
+      expect(find.text('⭐⭐⭐ Débloqué !'), findsOneWidget);
+      expect(find.text('⭐ 1/3'), findsOneWidget);
+    });
   });
 }

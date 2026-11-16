@@ -255,6 +255,7 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
                         : 0),
               etoilesMax: widget.complet ? 3 : 1,
               diamants: (d - _baseParcours).clamp(0, 1 << 30),
+              succesLecon: widget.lesson.succes,
               recap: recap,
               message: messageEncouragement(
                 widget.complet ? etoiles : (etoiles > 0 ? 2 : 0),

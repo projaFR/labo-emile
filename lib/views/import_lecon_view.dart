@@ -1,13 +1,18 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../logic/lecon_json_logic.dart';
+import '../logic/trophees_logic.dart';
+import '../models/lesson_model.dart';
+import '../services/choisir_photo.dart';
+import '../services/gemini_key_store.dart';
+import '../services/gemini_lecon_service.dart';
 import '../services/ouvrir_lien.dart';
 import '../theme.dart';
-import '../models/lesson_model.dart';
+import '../widgets/dialogue_cle_gemini.dart';
 
-/// Import d'une leçon (collage du JSON de l'IA). Une seule implémentation,
-/// ouverte par « Ajouter une leçon » (après le code parent).
-/// Le format JSON des leçons n'a PAS changé.
+/// Import d'une leçon : création directe depuis une photo (Gemini sur Android
+/// et Windows) ou collage manuel d'un code JSON.
 class ImportLeconView extends StatefulWidget {
   final void Function(String matiere, LessonModel lecon) onLessonImported;
 
@@ -19,12 +24,125 @@ class ImportLeconView extends StatefulWidget {
 
 class _ImportLeconViewState extends State<ImportLeconView> {
   final _jsonController = TextEditingController();
+  final _precisionController = TextEditingController();
+
+  final List<PhotoLecon> _photos = [];
+  String? _cleGemini;
+  bool _cleChargee = false;
+  bool _enCours = false;
+  String? _erreurPhoto;
   String? _errorMessage;
+  LeconImportee? _apercu;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerCle();
+  }
+
+  Future<void> _chargerCle() async {
+    final cle = await lireCleGemini();
+    if (!mounted) return;
+    setState(() {
+      _cleGemini = cle;
+      _cleChargee = true;
+    });
+  }
 
   @override
   void dispose() {
     _jsonController.dispose();
+    _precisionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saisirCleSurPlace() async {
+    final res = await demanderEtEnregistrerCleGemini(
+      context,
+      cleActuelle: _cleGemini,
+    );
+    if (!res.modifie || !mounted) return;
+    setState(() {
+      _cleGemini = res.cle;
+      _erreurPhoto = null;
+    });
+  }
+
+  Future<void> _prendrePhoto() async {
+    if (_photos.length >= 3 || _enCours) return;
+    setState(() => _erreurPhoto = null);
+    try {
+      final photo = await prendrePhotoAppareil();
+      if (!mounted || photo == null) return;
+      setState(() {
+        if (_photos.length < 3) _photos.add(photo);
+        _apercu = null;
+      });
+    } on ErreurGeminiLecon catch (e) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = "Impossible d'ajouter la photo.");
+    }
+  }
+
+  Future<void> _choisirImages() async {
+    if (_photos.length >= 3 || _enCours) return;
+    setState(() => _erreurPhoto = null);
+    try {
+      final choisies = await choisirImagesAppareil();
+      if (!mounted || choisies.isEmpty) return;
+      setState(() {
+        for (final p in choisies) {
+          if (_photos.length >= 3) break;
+          _photos.add(p);
+        }
+        _apercu = null;
+      });
+    } on ErreurGeminiLecon catch (e) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = "Impossible de lire l'image choisie.");
+    }
+  }
+
+  Future<void> _fabriquerAvecGemini() async {
+    final cle = _cleGemini;
+    if (cle == null || _photos.isEmpty || _enCours) return;
+    setState(() {
+      _enCours = true;
+      _erreurPhoto = null;
+      _apercu = null;
+    });
+    try {
+      final lecon = await genererLeconDepuisPhotos(
+        apiKey: cle,
+        photos: List.of(_photos),
+        commentaireParent: _precisionController.text,
+      );
+      if (!mounted) return;
+      setState(() => _apercu = lecon);
+    } on ErreurGeminiLecon catch (e) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _erreurPhoto = 'Erreur inattendue pendant la création.',
+      );
+    } finally {
+      if (mounted) setState(() => _enCours = false);
+    }
+  }
+
+  void _validerApercu() {
+    final apercu = _apercu;
+    if (apercu == null) return;
+    widget.onLessonImported(apercu.matiere, apercu.lecon);
+    Navigator.pop(context);
   }
 
   Future<void> _openClaude() async {
@@ -40,7 +158,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
     } catch (_) {
       setState(() {
         _errorMessage =
-            '⚠️ Le navigateur a bloqué l\'accès au presse-papiers. '
+            "⚠️ Le navigateur a bloqué l'accès au presse-papiers. "
             'Colle le texte manuellement dans le champ ci-dessous.';
       });
       return;
@@ -49,7 +167,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
     if (text.isEmpty) {
       setState(() {
         _errorMessage =
-            '⚠️ Le presse-papiers est vide. Copie d\'abord le JSON '
+            "⚠️ Le presse-papiers est vide. Copie d'abord le JSON "
             'depuis Claude, puis réessaie.';
       });
       return;
@@ -58,169 +176,225 @@ class _ImportLeconViewState extends State<ImportLeconView> {
     _importJsonLesson();
   }
 
-  /// Nettoie le texte collé : supprime les balises ```json / ```,
-  /// et tout ce qui précède le premier { ou suit le dernier }.
-  String _cleanJson(String raw) {
-    // Enlever les balises markdown ```json ... ``` ou ``` ... ```
-    String s = raw.replaceAll(RegExp(r'```json\s*', caseSensitive: false), '');
-    s = s.replaceAll(RegExp(r'```\s*'), '');
-    // Garder uniquement ce qui est entre le premier { et le dernier }
-    final start = s.indexOf('{');
-    final end = s.lastIndexOf('}');
-    if (start != -1 && end != -1 && end > start) {
-      s = s.substring(start, end + 1);
-    }
-    return s.trim();
-  }
-
   void _importJsonLesson() {
     setState(() => _errorMessage = null);
     final rawText = _jsonController.text.trim();
     if (rawText.isEmpty) return;
 
     try {
-      final Map<String, dynamic> parsedJson = jsonDecode(_cleanJson(rawText));
-
-      // ✅ FIX : Validation explicite des champs obligatoires avant de continuer.
-      //          Une leçon sans titre ou sans contenu ne s'importe pas silencieusement.
-      if (parsedJson['titre'] == null ||
-          (parsedJson['titre'] as String).trim().isEmpty) {
-        setState(() => _errorMessage = "❌ Le champ 'titre' est obligatoire.");
-        return;
-      }
-
-      final String matiere = parsedJson['matiere'] ?? 'Mathématiques';
-      final String titre = (parsedJson['titre'] as String).trim();
-
-      // 1. Extraction des Astuces (Flashcards)
-      final List<dynamic> astucesRaw = parsedJson['astuces'] ?? [];
-      List<FlashcardModel> importedCards = [];
-      for (int i = 0; i < astucesRaw.length; i++) {
-        final item = astucesRaw[i];
-        // ✅ FIX : On signale les champs manquants au lieu de les ignorer
-        if (item['question'] == null || item['reponse'] == null) {
-          setState(
-            () => _errorMessage =
-                "❌ L'astuce n°${i + 1} est incomplète (question ou réponse manquante).",
-          );
-          return;
-        }
-        importedCards.add(
-          FlashcardModel(
-            question: item['question'] as String,
-            reponse: item['reponse'] as String,
-          ),
-        );
-      }
-
-      // 2. Extraction des Exercices
-      final List<dynamic> exercicesRaw = parsedJson['exercices'] ?? [];
-      List<ExerciseModel> importedExercises = [];
-      for (int i = 0; i < exercicesRaw.length; i++) {
-        final item = exercicesRaw[i];
-        if (item['question'] == null) {
-          setState(
-            () => _errorMessage =
-                "❌ L'exercice n°${i + 1} n'a pas de 'question'.",
-          );
-          return;
-        }
-
-        final String question = item['question'] as String;
-        final int nbTrous = question.split('[?]').length - 1;
-
-        List<String> optionsList = [];
-        if (item['options'] != null) {
-          optionsList = List<String>.from(item['options']);
-        }
-
-        List<String> reponsesMultiples = [];
-        if (item['reponsesMultiples'] != null) {
-          reponsesMultiples = List<String>.from(item['reponsesMultiples']);
-        }
-
-        // ✅ Pour TOUS les types (QCM ou trous numériques) :
-        // chaque [?] correspond maintenant à une case visible dans la question.
-        // La règle s'applique donc universellement.
-        if (nbTrous > 1 && reponsesMultiples.isEmpty) {
-          // QCM à trou unique : reponseAttendue suffit, pas d'erreur
-          final bool isQcmSingleHole = optionsList.isNotEmpty && nbTrous == 1;
-          if (!isQcmSingleHole) {
-            setState(
-              () => _errorMessage =
-                  "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
-                  "mais 'reponsesMultiples' est absent ou vide.\n"
-                  "Corrige le JSON ou relance la génération.",
-            );
-            return;
-          }
-        }
-
-        if (reponsesMultiples.isNotEmpty &&
-            reponsesMultiples.length != nbTrous) {
-          setState(
-            () => _errorMessage =
-                "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
-                "mais ${reponsesMultiples.length} réponse(s) dans 'reponsesMultiples'.\n"
-                "Le nombre doit être identique.",
-          );
-          return;
-        }
-
-        importedExercises.add(
-          ExerciseModel(
-            question: question,
-            consigne: item['consigne'] ?? 'Trouve la bonne réponse',
-            reponseAttendue: item['reponseAttendue']?.toString() ?? '',
-            reponsesMultiples: reponsesMultiples,
-            astuceErreur: item['astuceErreur'] ?? '',
-            options: optionsList,
-          ),
-        );
-      }
-
-      // 3. Extraction du Défi Chrono (Quiz)
-      final List<dynamic> quizRaw = parsedJson['quiz'] ?? [];
-      List<QuizModel> importedQuiz = [];
-      for (int i = 0; i < quizRaw.length; i++) {
-        final item = quizRaw[i];
-        if (item['question'] == null ||
-            item['options'] == null ||
-            item['indexCorrect'] == null) {
-          setState(
-            () => _errorMessage =
-                "❌ La question de quiz n°${i + 1} est incomplète.",
-          );
-          return;
-        }
-        importedQuiz.add(
-          QuizModel(
-            question: item['question'] as String,
-            options: List<String>.from(item['options']),
-            indexCorrect: item['indexCorrect'] as int,
-          ),
-        );
-      }
-
-      final newLesson = LessonModel(
-        titre: titre,
-        astuces: importedCards,
-        exercices: importedExercises,
-        quiz: importedQuiz,
-      );
-
-      widget.onLessonImported(matiere, newLesson);
+      final res = analyserJsonLecon(rawText);
+      widget.onLessonImported(res.matiere, res.lecon);
       Navigator.pop(context);
-    } catch (e) {
+    } on FormatException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (_) {
       setState(() {
         _errorMessage =
-            "❌ Code JSON mal copié ou invalide. Vérifie la syntaxe.";
+            '❌ Code JSON mal copié ou invalide. Vérifie la syntaxe.';
       });
     }
   }
 
+  Widget _blocPhotoGemini() {
+    final limiteAtteinte = _photos.length >= 3;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          '📸 Créer une leçon depuis une photo',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: LaboPalette.ink,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_cleChargee && _cleGemini == null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: LaboShape.card,
+              border: Border.all(color: LaboPalette.or),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Enregistre une seule fois ta clé Gemini gratuite pour '
+                  'transformer une photo en leçon :',
+                  style: TextStyle(fontSize: 13, color: LaboPalette.ink),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: _enCours ? null : _saisirCleSurPlace,
+                  icon: const Icon(Icons.key),
+                  label: const Text(
+                    '🔑 Enregistrer ma clé Gemini gratuite',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LaboPalette.nuit,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+        if (peutPrendrePhoto)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: (limiteAtteinte || _enCours)
+                      ? null
+                      : _prendrePhoto,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('📷 Prendre en photo'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: (limiteAtteinte || _enCours)
+                      ? null
+                      : _choisirImages,
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('🖼️ Galerie'),
+                ),
+              ),
+            ],
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: (limiteAtteinte || _enCours) ? null : _choisirImages,
+            icon: const Icon(Icons.folder_open),
+            label: const Text('📁 Choisir une photo de la leçon'),
+          ),
+        if (_photos.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (var i = 0; i < _photos.length; i++)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        _photos[i].octets,
+                        width: 78,
+                        height: 78,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    if (!_enCours)
+                      Positioned(
+                        top: -6,
+                        right: -6,
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _photos.removeAt(i);
+                            _apercu = null;
+                          }),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: const BoxDecoration(
+                              color: LaboPalette.rouge,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 10),
+        TextField(
+          controller: _precisionController,
+          enabled: !_enCours,
+          decoration: const InputDecoration(
+            hintText:
+                "Précision pour l'IA (facultatif, ex : CE2, table de 7…)",
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 50,
+          child: ElevatedButton.icon(
+            onPressed: (_photos.isEmpty || _enCours || _cleGemini == null)
+                ? null
+                : _fabriquerAvecGemini,
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text(
+              '✨ Fabriquer la leçon avec Gemini',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: LaboPalette.encre,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
+            ),
+          ),
+        ),
+        if (_enCours) ...[
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Gemini lit la photo et prépare la leçon (15 à 20 s)…',
+                  style: TextStyle(fontSize: 13, color: LaboPalette.muted),
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (_erreurPhoto != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _erreurPhoto!,
+            style: const TextStyle(
+              color: LaboPalette.rouge,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ],
+        if (_apercu != null) ...[
+          const SizedBox(height: 12),
+          _CarteApercuLecon(
+            apercu: _apercu!,
+            onValider: _validerApercu,
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final avecPhoto = peutChoisirImage;
     return Padding(
       padding: EdgeInsets.only(
         top: 20,
@@ -235,10 +409,10 @@ class _ImportLeconViewState extends State<ImportLeconView> {
           children: [
             const Row(
               children: [
-                Text("📸", style: TextStyle(fontSize: 24)),
+                Text('📸', style: TextStyle(fontSize: 24)),
                 SizedBox(width: 8),
                 Text(
-                  "Ajouter une leçon",
+                  'Ajouter une leçon',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -248,101 +422,238 @@ class _ImportLeconViewState extends State<ImportLeconView> {
               ],
             ),
             const SizedBox(height: 12),
-            // Bouton "Créer une leçon avec Claude"
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _openClaude,
-                icon: const Icon(Icons.auto_awesome, color: Colors.deepPurple),
-                label: const Text(
-                  'Créer une leçon avec Claude ✨',
-                  style: TextStyle(
-                    color: Colors.deepPurple,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.deepPurple),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _jsonController,
-              maxLines: 5,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Colle le code JSON de Claude ici...',
-                border: const OutlineInputBorder(),
-                fillColor: Colors.grey.shade50,
-                filled: true,
-              ),
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: TextStyle(
-                  color: _errorMessage!.startsWith('⚠️')
-                      ? Colors.orange.shade800
-                      : LaboPalette.rouge,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
+            if (avecPhoto) ...[
+              _blocPhotoGemini(),
+              const SizedBox(height: 12),
             ],
-            const SizedBox(height: 10),
-            // Boutons côte à côte : Coller&importer  |  Analyser&Activer
-            Row(
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: !avecPhoto,
+              title: const Text(
+                '📋 Ou coller un code JSON manuellement',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: LaboPalette.muted,
+                ),
+              ),
               children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _pasteAndImport,
-                      icon: const Icon(Icons.content_paste),
-                      label: const Text(
-                        'Coller et importer',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                const SizedBox(height: 6),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _openClaude,
+                    icon: const Icon(
+                      Icons.auto_awesome,
+                      color: Colors.deepPurple,
+                    ),
+                    label: const Text(
+                      'Créer une leçon avec Claude ✨',
+                      style: TextStyle(
+                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.bold,
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: LaboShape.card,
-                        ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.deepPurple),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _importJsonLesson,
-                      icon: const Icon(Icons.download_done),
-                      label: const Text(
-                        'Analyser 🚀',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: LaboPalette.encre,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: LaboShape.card,
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _jsonController,
+                  maxLines: 5,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Colle le code JSON de Claude ici...',
+                    border: const OutlineInputBorder(),
+                    fillColor: Colors.grey.shade50,
+                    filled: true,
+                  ),
+                ),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _errorMessage!,
+                    style: TextStyle(
+                      color: _errorMessage!.startsWith('⚠️')
+                          ? Colors.orange.shade800
+                          : LaboPalette.rouge,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _pasteAndImport,
+                          icon: const Icon(Icons.content_paste),
+                          label: const Text(
+                            'Coller et importer',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: LaboShape.card,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _importJsonLesson,
+                          icon: const Icon(Icons.download_done),
+                          label: const Text(
+                            'Analyser 🚀',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: LaboPalette.encre,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: LaboShape.card,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 6),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CarteApercuLecon extends StatelessWidget {
+  final LeconImportee apercu;
+  final VoidCallback onValider;
+
+  const _CarteApercuLecon({required this.apercu, required this.onValider});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = apercu.lecon;
+    final badge = separerBadgeSucces(l.succes, l.titre);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: LaboPalette.good, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            apercu.matiere,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: LaboPalette.muted,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            l.titre,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: LaboPalette.ink,
+            ),
+          ),
+          if (l.succes != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: LaboPalette.or, width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(color: LaboPalette.or),
+                    ),
+                    child: Text(
+                      badge.emoji,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      badge.nom,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: LaboPalette.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            '${l.astuces.length} astuces · '
+            '${l.exercices.length} exercices · '
+            '${l.quiz.length} quiz',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: LaboPalette.ink,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: onValider,
+              icon: const Icon(Icons.check_circle),
+              label: const Text(
+                '✅ Ajouter cette leçon au Labo',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LaboPalette.good,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

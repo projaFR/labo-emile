@@ -15,6 +15,7 @@ class FinLeconView extends StatelessWidget {
 
   /// Diamants gagnés pendant ce passage.
   final int diamants;
+  final String? succesLecon;
   final RecapParcours recap;
   final String message;
   final String libelleRetour;
@@ -28,6 +29,7 @@ class FinLeconView extends StatelessWidget {
     required this.etoiles,
     required this.etoilesMax,
     required this.diamants,
+    this.succesLecon,
     required this.recap,
     required this.message,
     required this.libelleRetour,
@@ -68,6 +70,34 @@ class FinLeconView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14, color: LaboPalette.muted),
             ),
+            if (leconComplete &&
+                etoiles >= 3 &&
+                succesLecon != null &&
+                succesLecon!.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: LaboPalette.or, width: 2),
+                ),
+                child: Text(
+                  "🏅 Badge débloqué : ${succesLecon!.trim()}",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: LaboPalette.ink,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Text(
               message,

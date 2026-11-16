@@ -3,11 +3,16 @@ import '../logic/accueil_logic.dart';
 import '../logic/trophees_logic.dart';
 import '../theme.dart';
 
-/// « Mes trophées » : carte héros, galerie des titres, petites stats.
+/// « Mes trophées » : carte héros, badges de leçons, galerie des titres, stats.
 class TropheesView extends StatelessWidget {
   final StatsTrophees stats;
+  final List<BadgeLecon> badgesLecons;
 
-  const TropheesView({super.key, required this.stats});
+  const TropheesView({
+    super.key,
+    required this.stats,
+    this.badgesLecons = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +20,7 @@ class TropheesView extends StatelessWidget {
     final niveau = niveauPour(diamants);
     final titres = galerieTitres(niveau);
     final actuel = titres.firstWhere((t) => t.etat == EtatTitre.actuel);
+    final nbDebloques = badgesLecons.where((b) => b.debloque).length;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -28,6 +34,43 @@ class TropheesView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _CarteHeros(actuel: actuel, niveau: niveau, diamants: diamants),
+        if (badgesLecons.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const Expanded(child: _TitreSection("Mes badges de leçons")),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: LaboPalette.or.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: LaboPalette.or),
+                ),
+                child: Text(
+                  "$nbDebloques/${badgesLecons.length}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: LaboPalette.ink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          GridView.builder(
+            itemCount: badgesLecons.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              mainAxisExtent: 192,
+            ),
+            itemBuilder: (_, i) => _CarteBadgeSucces(badge: badgesLecons[i]),
+          ),
+        ],
         const SizedBox(height: 20),
         const _TitreSection("Mes titres"),
         const SizedBox(height: 8),
@@ -323,4 +366,135 @@ class _CarteStat extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _CarteBadgeSucces extends StatelessWidget {
+  final BadgeLecon badge;
+  const _CarteBadgeSucces({required this.badge});
+
+  @override
+  Widget build(BuildContext context) {
+    final debloque = badge.debloque;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: debloque
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+              )
+            : null,
+        color: debloque ? null : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: debloque ? LaboPalette.or : LaboPalette.line,
+          width: debloque ? 2.5 : 1.5,
+        ),
+        boxShadow: debloque
+            ? const [
+                BoxShadow(
+                  color: Color(0x26FFC107),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: debloque ? Colors.white : Colors.grey.shade200,
+                  border: Border.all(
+                    color: debloque ? LaboPalette.or : Colors.grey.shade400,
+                    width: 2,
+                  ),
+                ),
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: debloque
+                        ? const Color(0xFFFFF8E1)
+                        : Colors.grey.shade300,
+                  ),
+                  child: Opacity(
+                    opacity: debloque ? 1.0 : 0.45,
+                    child: Text(
+                      badge.emoji,
+                      style: const TextStyle(fontSize: 28),
+                    ),
+                  ),
+                ),
+              ),
+              if (!debloque)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade700,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.lock,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            badge.nom,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 13.5,
+              height: 1.15,
+              color: debloque ? LaboPalette.ink : Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            badge.titreLecon,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, color: LaboPalette.muted),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: debloque ? LaboPalette.good : Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              debloque ? "⭐⭐⭐ Débloqué !" : "⭐ ${badge.etoiles}/3",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: debloque ? Colors.white : Colors.grey.shade800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

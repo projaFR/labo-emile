@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:myapp/data/database.dart';
 import 'package:myapp/logic/memoire.dart';
 import 'package:myapp/logic/sauvegarde.dart';
+import 'package:myapp/models/lesson_model.dart';
+import 'package:myapp/services/gemini_key_store.dart';
 
 Map<String, Object> _exemple() {
   final l = InitialDatabase.data.values.first.first;
@@ -109,5 +111,34 @@ void main() {
     expect(v.resume, contains('1 leçon importée'));
     expect(v.resume, contains('123 diamants'));
     expect(v.resume, contains('niveau ${v.niveau}'));
+  });
+
+  test('la clé Gemini n\'est jamais incluse et succes est conservé', () async {
+    const lecon = LessonModel(
+      titre: 'Test',
+      succes: '🚀 Pilote',
+      astuces: [],
+      exercices: [],
+      quiz: [],
+    );
+    SharedPreferences.setMockInitialValues({
+      kCleGeminiPrefs: 'AIzaSecretGeminiKey1234',
+      'custom_lessons': jsonEncode({
+        'Maths': [lecon.toJson()],
+      }),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final t = await sauvegardeActuelle(prefs);
+    expect(t.contains('AIzaSecretGeminiKey1234'), isFalse);
+    expect(t.contains(kCleGeminiPrefs), isFalse);
+    expect(t.contains('🚀 Pilote'), isTrue);
+
+    final v = validerSauvegarde(t);
+    final custom = jsonDecode(v.valeurs['custom_lessons'] as String)
+        as Map<String, dynamic>;
+    final l2 = LessonModel.fromJson(
+      (custom['Maths'] as List).first as Map<String, dynamic>,
+    );
+    expect(l2.succes, '🚀 Pilote');
   });
 }

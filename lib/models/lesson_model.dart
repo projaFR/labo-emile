@@ -8,12 +8,14 @@ enum ExerciseType {
 
 class LessonModel {
   final String titre;
+  final String? succes;
   final List<FlashcardModel> astuces;
   final List<ExerciseModel> exercices;
   final List<QuizModel> quiz;
 
   const LessonModel({
     required this.titre,
+    this.succes,
     required this.astuces,
     required this.exercices,
     required this.quiz,
@@ -21,23 +23,31 @@ class LessonModel {
 
   Map<String, dynamic> toJson() => {
     'titre': titre,
+    if (succes != null && succes!.trim().isNotEmpty) 'succes': succes!.trim(),
     'astuces': astuces.map((a) => a.toJson()).toList(),
     'exercices': exercices.map((e) => e.toJson()).toList(),
     'quiz': quiz.map((q) => q.toJson()).toList(),
   };
 
-  factory LessonModel.fromJson(Map<String, dynamic> json) => LessonModel(
-    titre: json['titre'] as String,
-    astuces: (json['astuces'] as List)
-        .map((a) => FlashcardModel.fromJson(a as Map<String, dynamic>))
-        .toList(),
-    exercices: (json['exercices'] as List)
-        .map((e) => ExerciseModel.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    quiz: (json['quiz'] as List)
-        .map((q) => QuizModel.fromJson(q as Map<String, dynamic>))
-        .toList(),
-  );
+  factory LessonModel.fromJson(Map<String, dynamic> json) {
+    final rawSucces = json['succes'];
+    final succes = (rawSucces is String && rawSucces.trim().isNotEmpty)
+        ? rawSucces.trim()
+        : null;
+    return LessonModel(
+      titre: json['titre'] as String,
+      succes: succes,
+      astuces: (json['astuces'] as List)
+          .map((a) => FlashcardModel.fromJson(a as Map<String, dynamic>))
+          .toList(),
+      exercices: (json['exercices'] as List)
+          .map((e) => ExerciseModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      quiz: (json['quiz'] as List)
+          .map((q) => QuizModel.fromJson(q as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
 class FlashcardModel {

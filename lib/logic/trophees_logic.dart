@@ -93,3 +93,59 @@ StatsTrophees calculerStats({
     leconsTotal: etoilesParLecon.length,
   );
 }
+
+/// Un badge de succès attaché à une leçon (débloqué à 3 étoiles).
+class BadgeLecon {
+  final String titreLecon;
+  final String matiere;
+  final String emoji;
+  final String nom;
+  final bool debloque;
+  final int etoiles; // 0 à 3
+
+  const BadgeLecon({
+    required this.titreLecon,
+    required this.matiere,
+    required this.emoji,
+    required this.nom,
+    required this.debloque,
+    required this.etoiles,
+  });
+}
+
+/// Extrait l'emoji et le nom d'un succès de leçon, avec repli propre si absent.
+({String emoji, String nom}) separerBadgeSucces(
+  String? succes,
+  String titreLecon,
+) {
+  final propre = succes?.trim() ?? '';
+  if (propre.isEmpty) {
+    return (emoji: '🏅', nom: 'Champion · $titreLecon');
+  }
+  final s = separerTitre(propre);
+  if (s.emoji.isEmpty || RegExp(r'[a-zA-Z]').hasMatch(s.emoji)) {
+    return (emoji: '🏅', nom: propre);
+  }
+  return (emoji: s.emoji, nom: s.nom.trim());
+}
+
+/// Construit le badge d'une leçon à partir de ses 3 étoiles.
+BadgeLecon badgePourLecon(LeconRef r, List<bool> etoiles) {
+  final nb = nombreEtapesFaites(etoiles);
+  final s = separerBadgeSucces(r.lecon.succes, r.lecon.titre);
+  return BadgeLecon(
+    titreLecon: r.lecon.titre,
+    matiere: r.matiere,
+    emoji: s.emoji,
+    nom: s.nom,
+    debloque: nb >= 3,
+    etoiles: nb,
+  );
+}
+
+/// Galerie des badges de toutes les leçons.
+List<BadgeLecon> galerieBadgesLecons(
+  List<LeconRef> lecons,
+  List<bool> Function(String titre) etoilesDe,
+) => [for (final r in lecons) badgePourLecon(r, etoilesDe(r.lecon.titre))];
+

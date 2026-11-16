@@ -4,7 +4,9 @@ import '../logic/sauvegarde.dart';
 import '../version.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/gemini_key_store.dart';
 import '../services/settings_service.dart';
+import '../widgets/dialogue_cle_gemini.dart';
 
 class ParentView extends StatefulWidget {
   final int currentDiamonds;
@@ -42,6 +44,33 @@ class ParentView extends StatefulWidget {
 class _ParentViewState extends State<ParentView> {
   late String? _titreASupprimer =
       widget.titresLecons.isEmpty ? null : widget.titresLecons.first;
+  String? _cleGemini;
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerCleGemini();
+  }
+
+  Future<void> _chargerCleGemini() async {
+    final cle = await lireCleGemini();
+    if (mounted) setState(() => _cleGemini = cle);
+  }
+
+  Future<void> _configurerCleGemini() async {
+    final res = await demanderEtEnregistrerCleGemini(
+      context,
+      cleActuelle: _cleGemini,
+      autoriserEffacement: true,
+    );
+    if (!res.modifie || !mounted) return;
+    setState(() => _cleGemini = res.cle);
+    _message(
+      res.cle == null
+          ? "Clé Gemini effacée."
+          : "Clé Gemini enregistrée sur cet appareil.",
+    );
+  }
 
   void _changePinCodeDialog() {
     final TextEditingController newPinController = TextEditingController();
@@ -397,6 +426,28 @@ class _ParentViewState extends State<ParentView> {
                     },
                   ),
               ],
+            ),
+            const Divider(height: 30),
+            const Text(
+              "✨ Création de leçons par photo (Gemini)",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              masquerCleGemini(_cleGemini),
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _configurerCleGemini,
+                icon: const Icon(Icons.key),
+                label: const Text("Configurer la clé Gemini gratuite"),
+              ),
             ),
             const Divider(height: 30),
             const Text(
