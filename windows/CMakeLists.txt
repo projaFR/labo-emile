@@ -53,9 +53,20 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 add_subdirectory("runner")
 
 
-# Generated plugin build rules, which manage building the plugins and adding
-# them to the application.
-include(flutter/generated_plugins.cmake)
+# ---------------------------------------------------------------------------
+# AUCUN PLUGIN NATIF SOUS WINDOWS (Smart App Control)
+# Smart App Control bloque les DLL de plugins Flutter non signees. Le Labo
+# n'embarque donc AUCUNE DLL de plugin : on n'inclut volontairement PAS
+# flutter/generated_plugins.cmake (que `flutter pub get` regenere avec
+# audioplayers et url_launcher). Sous Windows :
+#  - le son passe par winmm.dll (PlaySound, dart:ffi), voir lib/services/lecteur_son_io.dart ;
+#  - les liens passent par `cmd /c start`, voir lib/services/ouvrir_lien_io.dart ;
+#  - shared_preferences et confetti sont du Dart pur (pas de DLL).
+# Ce fichier et runner/flutter_window.cpp (sans RegisterPlugins) ne sont jamais
+# reecrits par Flutter : la technique tient apres pub get et build.
+# Si un jour un plugin natif Windows est ajoute, il faudra le declarer ici.
+# ---------------------------------------------------------------------------
+set(PLUGIN_BUNDLED_LIBRARIES)
 
 
 # === Installation ===
