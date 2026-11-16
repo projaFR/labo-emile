@@ -23,6 +23,6 @@ void main() {
 
     await tester.tap(find.text('Trophées'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('collection'), findsOneWidget);
+    expect(find.text('Mes trophées'), findsOneWidget);
   });
 }

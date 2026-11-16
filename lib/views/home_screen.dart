@@ -7,6 +7,7 @@ import '../logic/accueil_logic.dart';
 import '../logic/memoire.dart';
 import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
+import '../logic/trophees_logic.dart';
 import '../models/lesson_model.dart';
 import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
@@ -549,12 +550,13 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         final toutes = _toutes;
         return TropheesView(
-          diamants: _totalDiamonds,
-          combo: _currentCombo,
-          etoilesGagnees: toutes
-              .map((r) => nombreEtapesFaites(_etoilesDe(r.lecon.titre)))
-              .fold(0, (a, b) => a + b),
-          etoilesTotal: toutes.length * 3,
+          stats: calculerStats(
+            diamants: _totalDiamonds,
+            combo: _currentCombo,
+            etoilesParLecon: [
+              for (final r in toutes) _etoilesDe(r.lecon.titre),
+            ],
+          ),
         );
     }
   }
