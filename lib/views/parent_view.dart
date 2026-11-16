@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../logic/sauvegarde.dart';
+import '../version.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/settings_service.dart';
@@ -17,6 +20,9 @@ class ParentView extends StatefulWidget {
   /// Efface la mémoire par question (jamais les diamants ni les leçons).
   final Future<void> Function() onResetMemoire;
 
+  /// Appelée après une restauration réussie : recharge tout l'état.
+  final Future<void> Function() onRestauree;
+
   const ParentView({
     super.key,
     required this.currentDiamonds,
@@ -26,6 +32,7 @@ class ParentView extends StatefulWidget {
     required this.onDeleteLesson,
     required this.infoMemoire,
     required this.onResetMemoire,
+    required this.onRestauree,
   });
 
   @override
@@ -104,6 +111,90 @@ class _ParentViewState extends State<ParentView> {
         );
       },
     );
+  }
+
+  void _message(String texte, {bool erreur = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(texte),
+        backgroundColor: erreur ? LaboPalette.rouge : LaboPalette.good,
+      ),
+    );
+  }
+
+  Future<void> _copierSauvegarde() async {
+    final texte = await sauvegardeActuelle();
+    await Clipboard.setData(ClipboardData(text: texte));
+    if (!mounted) return;
+    _message("Sauvegarde copiée. Colle-la dans une note ou un message.");
+  }
+
+  Future<void> _restaurerSauvegarde() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final controller = TextEditingController(text: data?.text ?? '');
+    final texte = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Restaurer une sauvegarde"),
+        content: TextField(
+          controller: controller,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            hintText: "Colle ici le texte de la sauvegarde",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("ANNULER"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text("VÉRIFIER"),
+          ),
+        ],
+      ),
+    );
+    if (texte == null || !mounted) return;
+    final SauvegardeValide valide;
+    try {
+      valide = validerSauvegarde(texte);
+    } on FormatException catch (e) {
+      _message("${e.message} Rien n'a été modifié.", erreur: true);
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Remplacer la progression ?"),
+        content: Text(
+          "Cette sauvegarde contient : ${valide.resume}.\n\n"
+          "La progression actuelle sera remplacée (une copie de secours est "
+          "gardée).",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("ANNULER"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("RESTAURER"),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await appliquerSauvegarde(valide);
+      await widget.onRestauree();
+    } catch (_) {
+      if (mounted) _message("La restauration a échoué.", erreur: true);
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   Future<void> _confirmerResetMemoire() async {
@@ -307,6 +398,34 @@ class _ParentViewState extends State<ParentView> {
                   ),
               ],
             ),
+            const Divider(height: 30),
+            const Text(
+              "💾 Sauvegarde de la progression",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: LaboPalette.muted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _copierSauvegarde,
+                    icon: const Icon(Icons.copy),
+                    label: const Text("Copier la sauvegarde"),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _restaurerSauvegarde,
+                    icon: const Icon(Icons.restore),
+                    label: const Text("Restaurer une sauvegarde"),
+                  ),
+                ),
+              ],
+            ),
             const Divider(height: 40),
             const Text(
               "🚨 Zone de danger",
@@ -342,6 +461,12 @@ class _ParentViewState extends State<ParentView> {
               ),
             ),
             const SizedBox(height: 10),
+            const Center(
+              child: Text(
+                "Labo d'Émile v$kVersionAppli",
+                style: TextStyle(color: LaboPalette.muted, fontSize: 12),
+              ),
+            ),
           ],
         ),
       ),
