@@ -173,3 +173,8 @@ Toutes les données sont stockées localement via `SharedPreferences` :
 - Ordre aléatoire des questions et options
 - Validation JSON à l'import (détection des erreurs de format)
 - Suppression de leçons fonctionnelle
+## Régénérer l'icône de l'appli
+
+1. `flutter test tool/generer_icone_test.dart` repeint le widget `MicroscopeIcon` dans `assets/` et `web/` (hors de `test/`, donc non lancé par `flutter test`).
+2. `dart run flutter_launcher_icons` régénère les icônes Android (mipmaps et icône adaptative).
+3. Remettre `pubspec.lock` tel quel (`git checkout -- pubspec.lock`) s'il a bougé.
