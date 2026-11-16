@@ -14,7 +14,8 @@ from PIL import Image
 
 R = Path(__file__).resolve().parent.parent
 N = 4.4          # exposant de la superellipse
-PROP = 0.60      # taille du dessin / carré
+PROP = 0.66      # taille du dessin / carré (largeur et hauteur ~62-66 %,
+                 # comparable au livre de Réviser)
 CY = 0.48        # centre vertical du dessin
 HAUT = (101, 168, 243)   # bleu clair du dégradé (H 211,8 / L 0,674 / S 0,856)
 BAS = (46, 122, 208)     # bleu foncé du dégradé (H 211,8 / L 0,498 / S 0,637)

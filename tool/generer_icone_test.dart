@@ -9,9 +9,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myapp/widgets/microscope_icon.dart';
 
-// Bras opaque : blanc teinté de la teinte du fond (HSL 212, 60 %, 88 %).
-const _bras = Color(0xFFCEE0F3);
-
 void main() {
   final cle = GlobalKey();
 
@@ -27,7 +24,7 @@ void main() {
           child: const SizedBox(
             width: 1024,
             height: 1024,
-            child: Center(child: MicroscopeIcon(size: 720, bras: _bras)),
+            child: Center(child: MicroscopeIcon(size: 720, grandIcone: true)),
           ),
         ),
       ),
