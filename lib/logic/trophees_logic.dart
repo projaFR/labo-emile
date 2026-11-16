@@ -234,6 +234,34 @@ String choisirCleIconeBadge(
   return _clesIconesBadge[somme % _clesIconesBadge.length];
 }
 
+/// Retourne un emoji représentatif pour chaque clé thématique de badge.
+String emojiPourCleIcone(String cle) => switch (cle) {
+  'hibou' => '🦉',
+  'compas' => '📐',
+  'calcul' => '🧮',
+  'fusee' => '🚀',
+  'eclair' => '⚡',
+  'bouclier' => '🛡️',
+  'magie' => '🔮',
+  'couronne' => '👑',
+  'plume' => '✒️',
+  'livre' => '📖',
+  'science' => '🧪',
+  'cerveau' => '🧠',
+  'boussole' => '🧭',
+  'globe' => '🌍',
+  'sablier' => '⏳',
+  'chateau' => '🏰',
+  'langue' => '🗣️',
+  'flamme' => '🐉',
+  'nature' => '🌲',
+  'bateau' => '⛵',
+  'ampoule' => '💡',
+  'puzzle' => '🧩',
+  'cle' => '🔑',
+  _ => '🏅',
+};
+
 /// Un badge de succès attaché à une leçon (évolue avec les 3 étoiles puis la mémoire).
 class BadgeLecon {
   final String titreLecon;
@@ -297,12 +325,14 @@ BadgeLecon badgePourLecon(
     partRevues: partRevues,
     maitrise: maitrise,
   );
+  final cleIcone = choisirCleIconeBadge(s.nom, r.lecon.titre, r.matiere);
+  final emoji = s.emoji == '🏅' ? emojiPourCleIcone(cleIcone) : s.emoji;
   return BadgeLecon(
     titreLecon: r.lecon.titre,
     matiere: r.matiere,
-    emoji: s.emoji,
+    emoji: emoji,
     nom: s.nom,
-    cleIcone: choisirCleIconeBadge(s.nom, r.lecon.titre, r.matiere),
+    cleIcone: cleIcone,
     niveau: niveau,
     etoiles: nb,
     partRevues: partRevues,

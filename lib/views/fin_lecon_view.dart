@@ -101,6 +101,9 @@ class FinLeconView extends StatelessWidget {
                           diametre: 44,
                           cleIcone: cle,
                           niveau: NiveauBadge.bronze,
+                          emoji: s.emoji == '🏅'
+                              ? emojiPourCleIcone(cle)
+                              : s.emoji,
                         ),
                         const SizedBox(width: 12),
                         Expanded(

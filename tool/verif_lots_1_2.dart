@@ -83,6 +83,9 @@ Future<void> main() async {
   assert(choisirCleIconeBadge('Architecte des Nombres', 'Multiplications', 'Maths') == 'compas');
   assert(choisirCleIconeBadge('Pilote de Fusée', 'Espace', 'Sciences') == 'fusee');
   assert(choisirCleIconeBadge('As de la Plume', 'Accords', 'Français') == 'plume');
+  assert(emojiPourCleIcone('hibou') == '🦉');
+  assert(emojiPourCleIcone('compas') == '📐');
+  assert(emojiPourCleIcone('fusee') == '🚀');
 
   const lecon4Q = LessonModel(
     titre: 'Multiplications',
@@ -105,9 +108,10 @@ Future<void> main() async {
   );
   assert(galerie.length == 2);
   assert(galerie[0].debloque && galerie[0].niveau == NiveauBadge.bronze);
-  assert(galerie[0].cleIcone == 'compas' && galerie[0].nom == 'Architecte des Nombres');
+  assert(galerie[0].cleIcone == 'compas' && galerie[0].emoji == '🧮');
   assert(!galerie[1].debloque && galerie[1].niveau == NiveauBadge.verrouille && galerie[1].etoiles == 2);
   assert(galerie[1].nom == 'Champion · Ancienne leçon');
+  assert(galerie[1].emoji == emojiPourCleIcone(galerie[1].cleIcone));
 
   final galerie0 = galerieBadgesLecons([refA], (_) => [false, false, false]);
   assert(!galerie0.first.debloque && galerie0.first.niveau == NiveauBadge.verrouille);

@@ -3,35 +3,6 @@ import 'package:flutter/material.dart';
 import '../logic/trophees_logic.dart';
 import '../theme.dart';
 
-/// Retourne une icône Material constante (compatible tree-shaking Release)
-/// selon la clé thématique du badge.
-IconData iconeFlutterPourCle(String cle) => switch (cle) {
-  'hibou' => Icons.pets,
-  'compas' => Icons.architecture,
-  'calcul' => Icons.calculate,
-  'fusee' => Icons.rocket_launch,
-  'eclair' => Icons.bolt,
-  'bouclier' => Icons.shield,
-  'magie' => Icons.auto_fix_high,
-  'couronne' => Icons.workspace_premium,
-  'plume' => Icons.edit_note,
-  'livre' => Icons.menu_book,
-  'science' => Icons.science,
-  'cerveau' => Icons.psychology,
-  'boussole' => Icons.explore,
-  'globe' => Icons.public,
-  'sablier' => Icons.hourglass_bottom,
-  'chateau' => Icons.castle,
-  'langue' => Icons.translate,
-  'flamme' => Icons.local_fire_department,
-  'nature' => Icons.park,
-  'bateau' => Icons.sailing,
-  'ampoule' => Icons.lightbulb,
-  'puzzle' => Icons.extension,
-  'cle' => Icons.vpn_key,
-  _ => Icons.emoji_events,
-};
-
 /// Palette visuelle d'un palier de badge (utilisable aussi pour les pastilles).
 class StyleNiveauBadge {
   final List<Color> degrade;
@@ -80,17 +51,20 @@ StyleNiveauBadge styleNiveauBadge(NiveauBadge niveau) => switch (niveau) {
   ),
 };
 
-/// Petit médaillon circulaire contenant l'icône du badge et son niveau.
+/// Petit médaillon circulaire contenant la silhouette monochrome de l'emoji du
+/// badge et la pastille de son niveau.
 class BadgeRond extends StatelessWidget {
   final double diametre;
   final String cleIcone;
   final NiveauBadge niveau;
+  final String? emoji;
 
   const BadgeRond({
     super.key,
     this.diametre = 64,
     required this.cleIcone,
     required this.niveau,
+    this.emoji,
   });
 
   @override
@@ -98,6 +72,9 @@ class BadgeRond extends StatelessWidget {
     final style = styleNiveauBadge(niveau);
     final debloque = niveau != NiveauBadge.verrouille;
     final taillePastille = (diametre * 0.34).clamp(15.0, 24.0);
+    final caractere = (emoji != null && emoji!.trim().isNotEmpty)
+        ? emoji!.trim()
+        : emojiPourCleIcone(cleIcone);
     return SizedBox(
       width: diametre,
       height: diametre,
@@ -131,10 +108,16 @@ class BadgeRond extends StatelessWidget {
                   colors: style.degrade,
                 ),
               ),
-              child: Icon(
-                iconeFlutterPourCle(cleIcone),
-                size: diametre * 0.44,
-                color: style.icone,
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(style.icone, BlendMode.srcIn),
+                child: Text(
+                  caractere,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: diametre * 0.44,
+                    height: 1.0,
+                  ),
+                ),
               ),
             ),
           ),

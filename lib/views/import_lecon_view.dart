@@ -605,6 +605,7 @@ class _CarteApercuLecon extends StatelessWidget {
                       apercu.matiere,
                     ),
                     niveau: NiveauBadge.or,
+                    emoji: badge.emoji == '🏅' ? null : badge.emoji,
                   ),
                   const SizedBox(width: 10),
                   Expanded(

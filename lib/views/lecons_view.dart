@@ -157,6 +157,7 @@ class _LigneLecon extends StatelessWidget {
                         diametre: 40,
                         cleIcone: badge.cleIcone,
                         niveau: badge.niveau,
+                        emoji: badge.emoji,
                       ),
                       const SizedBox(width: 12),
                       Expanded(

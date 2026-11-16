@@ -179,11 +179,13 @@ void main() {
       );
     });
 
-    test('choisirCleIconeBadge change selon le thème du badge', () {
+    test('choisirCleIconeBadge et emojiPourCleIcone selon le thème', () {
       expect(choisirCleIconeBadge('Dompteur de Hiboux', 'Pluriel', 'Français'), 'hibou');
       expect(choisirCleIconeBadge('Architecte des Nombres', 'Multiplications', 'Maths'), 'compas');
       expect(choisirCleIconeBadge('Pilote de Fusée', 'Espace', 'Sciences'), 'fusee');
       expect(choisirCleIconeBadge('As de la Plume', 'Accords', 'Français'), 'plume');
+      expect(emojiPourCleIcone('hibou'), '🦉');
+      expect(emojiPourCleIcone('fusee'), '🚀');
     });
 
     testWidgets('affiche la grille des badges ronds dans TropheesView', (

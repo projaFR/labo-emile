@@ -290,6 +290,7 @@ class _BandeauBadgeLecon extends StatelessWidget {
             diametre: 52,
             cleIcone: badge.cleIcone,
             niveau: badge.niveau,
+            emoji: badge.emoji,
           ),
           const SizedBox(width: 12),
           Expanded(

@@ -190,16 +190,8 @@ class _ExerciseViewState extends State<ExerciseView> {
     } else {
       _shuffledOptions = [];
       for (int i = 0; i < nbTrous; i++) {
-        final controller = TextEditingController();
-        final focusNode = FocusNode();
-        final int idx = i;
-        controller.addListener(() {
-          if (controller.text.isNotEmpty && idx < _focusNodes.length - 1) {
-            _focusNodes[idx + 1].requestFocus();
-          }
-        });
-        _controllers.add(controller);
-        _focusNodes.add(focusNode);
+        _controllers.add(TextEditingController());
+        _focusNodes.add(FocusNode());
       }
     }
   }
@@ -458,7 +450,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                     boxShadow: isActive
                         ? [
                             BoxShadow(
-                              color: Colors.blue.withOpacity(0.2),
+                              color: Colors.blue.withValues(alpha: 0.2),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
@@ -490,6 +482,16 @@ class _ExerciseViewState extends State<ExerciseView> {
                   focusNode: _focusNodes[i],
                   enabled: !_isSubmitted,
                   keyboardType: TextInputType.number,
+                  textInputAction: i < _controllers.length - 1
+                      ? TextInputAction.next
+                      : TextInputAction.done,
+                  onSubmitted: (_) {
+                    if (i < _focusNodes.length - 1) {
+                      _focusNodes[i + 1].requestFocus();
+                    } else {
+                      _validateNumericAnswers(currentEx);
+                    }
+                  },
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 20,

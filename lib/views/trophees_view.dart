@@ -386,6 +386,7 @@ class _PastilleBadgeSucces extends StatelessWidget {
               diametre: 84,
               cleIcone: badge.cleIcone,
               niveau: badge.niveau,
+              emoji: badge.emoji,
             ),
             const SizedBox(height: 12),
             Text(
@@ -440,6 +441,7 @@ class _PastilleBadgeSucces extends StatelessWidget {
                           diametre: 34,
                           cleIcone: badge.cleIcone,
                           niveau: n,
+                          emoji: badge.emoji,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -495,6 +497,7 @@ class _PastilleBadgeSucces extends StatelessWidget {
               diametre: 64,
               cleIcone: badge.cleIcone,
               niveau: badge.niveau,
+              emoji: badge.emoji,
             ),
             const SizedBox(height: 8),
             Text(
