@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import 'package:flutter/services.dart';
 import '../models/lesson_model.dart';
 import '../services/sound_service.dart';
@@ -171,7 +172,7 @@ class _QuizViewState extends State<QuizView> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  color: LaboPalette.encre,
                 ),
               ),
               const SizedBox(height: 12),
@@ -224,13 +225,13 @@ class _QuizViewState extends State<QuizView> {
                     "Question ${_currentIndex + 1} / ${_shuffledQuiz.length}",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.blueGrey,
+                      color: LaboPalette.muted,
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _timeLeft <= 5 ? Colors.red : Colors.orange,
+                      color: _timeLeft <= 5 ? LaboPalette.rouge : LaboPalette.warn,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -254,7 +255,7 @@ class _QuizViewState extends State<QuizView> {
                     style: TextStyle(
                       fontSize: questionFontSize,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF2C3E50),
+                      color: LaboPalette.ink,
                     ),
                   ),
                 ),
@@ -289,12 +290,12 @@ class _QuizViewState extends State<QuizView> {
                         backgroundColor: btnColor,
                         side: BorderSide(
                           color: _isSubmitted && isCorrectOption
-                              ? Colors.green
+                              ? LaboPalette.good
                               : Colors.black12,
                           width: 2,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: LaboShape.card,
                         ),
                       ),
                       child: Text(
@@ -317,7 +318,7 @@ class _QuizViewState extends State<QuizView> {
                     color: _selectedOptionIndex == currentQuiz.indexCorrect
                         ? Colors.green.shade50
                         : Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: LaboShape.button,
                   ),
                   child: Text(
                     _selectedOptionIndex == currentQuiz.indexCorrect
@@ -341,10 +342,10 @@ class _QuizViewState extends State<QuizView> {
                   child: ElevatedButton(
                     onPressed: _nextQuestion,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: LaboPalette.encre,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: LaboShape.card,
                       ),
                     ),
                     child: const Text(

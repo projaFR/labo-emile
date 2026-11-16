@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../theme.dart';
 import 'package:flutter/services.dart';
 import '../models/lesson_model.dart';
 import '../services/sound_service.dart';
@@ -162,7 +163,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                         "VOIR LA SOLUTION 🔍",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue,
+                          color: LaboPalette.encre,
                           fontSize: 13,
                         ),
                       ),
@@ -178,7 +179,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                               "À REVOIR ❌",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.red,
+                                color: LaboPalette.rouge,
                                 fontSize: 13,
                               ),
                             ),
@@ -194,7 +195,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                               "MAÎTRISÉ ✅",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.green,
+                                color: LaboPalette.good,
                                 fontSize: 13,
                               ),
                             ),
@@ -223,7 +224,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: LaboPalette.good,
                 ),
               ),
               const SizedBox(height: 8),
@@ -256,7 +257,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Colors.blueGrey,
+                color: LaboPalette.muted,
               ),
             ),
             const SizedBox(height: 10),
