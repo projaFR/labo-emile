@@ -218,7 +218,14 @@ class _RevisionViewState extends State<RevisionView> {
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
       ),
-      body: SafeArea(child: _corps()),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: _corps(),
+          ),
+        ),
+      ),
     );
   }
 }

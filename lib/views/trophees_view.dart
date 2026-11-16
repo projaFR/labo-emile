@@ -27,7 +27,7 @@ class TropheesView extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          "Mon coin collection",
+          "Mes trophées",
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w900,

@@ -64,6 +64,7 @@ class ParcoursScreen extends StatefulWidget {
 class _ParcoursScreenState extends State<ParcoursScreen> {
   late int _pos = widget.depart.clamp(0, widget.etapes.length - 1);
   _Phase _phase = _Phase.etape;
+  bool _sorti = false;
   int _gen = 0; // change à chaque nouvelle étape : repart d'une vue neuve
   final Map<int, ResultatEtape> _resultats = {};
   late List<bool> _etoilesAvant;
@@ -140,6 +141,7 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
 
   void _rejouer() {
     setState(() {
+      _sorti = false;
       _resultats.clear();
       _pos = 0;
       _gen++;
@@ -262,6 +264,8 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
                   ? "Retour à Aujourd'hui"
                   : "Retour à la leçon",
               onRetour: () {
+                if (_sorti) return; // un 2e appui rapide ne ferme pas deux fois
+                _sorti = true;
                 if (widget.complet) {
                   widget.onRetourAccueil();
                   Navigator.of(context).popUntil((r) => r.isFirst);

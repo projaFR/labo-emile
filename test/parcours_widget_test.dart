@@ -52,8 +52,13 @@ void main() {
     await tester.tap(find.textContaining('VOIR LA SOLUTION'));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('MAÎTRISÉ'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('Leçon terminée'), findsWidgets);
+    // Le bouton répond tout de suite, pendant l'animation des étoiles.
+    await tester.tap(find.text("Retour à Aujourd'hui"));
+    expect(retourAccueil, 1);
+    await tester.pumpAndSettle();
     expect(find.text("Retour à Aujourd'hui"), findsOneWidget);
     expect(find.text('Rejouer'), findsOneWidget);
     expect(find.textContaining('du 1er coup'), findsOneWidget);

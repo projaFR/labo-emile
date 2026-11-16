@@ -12,6 +12,7 @@ import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
 import '../theme.dart';
 import '../widgets/confetti_couche.dart';
+import '../widgets/route_rapide.dart';
 import 'aujourdhui_view.dart';
 import 'import_lecon_view.dart';
 import 'lecon_hub_screen.dart';
@@ -32,6 +33,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Évitent d'ouvrir deux pages si l'enfant tape deux fois très vite.
+  bool _navEnCours = false;
+  bool _navParcours = false;
   int _currentIndex = 0;
   String? _matiereFiltre; // null = « Toutes »
   String? _derniereImportee;
@@ -303,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _ouvrirRevision() {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      RouteRapide(
         builder: (_) => RevisionView(
           questions: _memoire.dues(_toutesQuestions),
           onTerminee: _recompenseRevision,
@@ -315,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// « Réviser quand même » : les 12 questions les plus faibles, sans diamants.
   void _ouvrirRevisionLibre() {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      RouteRapide(
         builder: (_) => RevisionView(
           questions: _memoire.plusFaibles(_toutesQuestions),
           onTerminee: () async => 0,
@@ -334,9 +338,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Page d'une leçon (depuis « Leçons »).
   void _ouvrirHub(LeconRef r) {
+    if (_navEnCours) return; // un 2e appui rapide n'ouvre pas deux pages
+    _navEnCours = true;
     Navigator.of(context)
         .push(
-          MaterialPageRoute(
+          RouteRapide(
             builder: (_) => LeconHubScreen(
               lecon: r,
               etoiles: () => _etoilesDe(r.lecon.titre),
@@ -348,6 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         )
         .then((_) {
+          _navEnCours = false;
           if (mounted) setState(() {});
         });
   }
@@ -360,9 +367,11 @@ class _HomeScreenState extends State<HomeScreen> {
     int depart = 0,
   }) {
     if (etapes.isEmpty) return Future.value();
+    if (_navParcours) return Future.value();
+    _navParcours = true;
     return Navigator.of(context)
         .push(
-          MaterialPageRoute(
+          RouteRapide(
             builder: (_) => ParcoursScreen(
               lesson: r.lecon,
               etapes: etapes,
@@ -382,6 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         )
         .then((_) {
+          _navParcours = false;
           if (mounted) setState(() {});
         });
   }
