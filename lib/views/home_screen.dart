@@ -1,20 +1,31 @@
 import 'dart:convert';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
-import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/database.dart';
+import '../logic/accueil_logic.dart';
 import '../logic/memoire.dart';
+import '../logic/parcours_logic.dart';
 import '../logic/seance_logic.dart';
+import '../logic/trophees_logic.dart';
+import '../models/lesson_model.dart';
 import '../services/memoire_service.dart';
 import '../services/sound_service.dart';
-import '../models/lesson_model.dart';
-import '../data/database.dart';
-import 'flashcards_view.dart';
-import 'exercise_view.dart';
+import '../theme.dart';
+import '../widgets/confetti_couche.dart';
+import '../widgets/route_rapide.dart';
+import 'aujourdhui_view.dart';
+import 'import_lecon_view.dart';
+import 'lecon_hub_screen.dart';
+import 'lecons_view.dart';
+import 'parcours_screen.dart';
 import 'parent_view.dart';
-import 'quiz_view.dart';
+import 'pin_gate.dart';
 import 'revision_view.dart';
+import 'trophees_view.dart';
 
+/// Conteneur de navigation : Aujourd'hui / Leçons / Trophées.
+/// Garde l'état commun (leçons, étoiles, diamants, combo).
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,10 +34,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Évitent d'ouvrir deux pages si l'enfant tape deux fois très vite.
+  bool _navEnCours = false;
+  bool _navParcours = false;
   int _currentIndex = 0;
-  String _selectedSubject = 'Mathématiques';
-  late LessonModel _selectedLesson;
-  int _totalDiamonds = 0;
+  String? _matiereFiltre; // null = « Toutes »
+  String? _derniereImportee;
+  // Diamants : un ValueNotifier laisse le parcours compter ceux gagnés.
+  final ValueNotifier<int> _diamantsNotif = ValueNotifier<int>(0);
+  int get _totalDiamonds => _diamantsNotif.value;
+  set _totalDiamonds(int v) => _diamantsNotif.value = v;
   int _currentCombo = 0;
 
   late ConfettiController _confettiController;
@@ -39,87 +56,12 @@ class _HomeScreenState extends State<HomeScreen> {
       e.key: List<LessonModel>.from(e.value),
   };
 
-  // Titres des leçons initiales, capturés une fois pour toujours au démarrage.
+  // Titres des leçons initiales, capturés une fois pour toutes au démarrage.
   // Utilisé par _saveCustomLessons pour ne sauvegarder QUE les leçons ajoutées.
   late final Set<String> _initialTitles = {
     for (final lessons in InitialDatabase.data.values)
       for (final l in lessons) l.titre,
   };
-
-  // ── 100 niveaux RPG ──────────────────────────────────────────────────────
-  static const List<String> _rankTitles = [
-    "🥚 Œuf Mystérieux",
-    "🐣 Poussin Curieux",
-    "🗡️ Recrue Courageuse",
-    "🛡️ Chevalier Junior",
-    "🏹 Archer Savant",
-    "🔮 Mage des Formules",
-    "🐉 Dompteur de Dragons",
-    "⚡ Maître du Tonnerre",
-    "💫 Élu des Étoiles",
-    "👑 Dieu du Savoir",
-  ];
-
-  static int _thresholdForLevel(int level) {
-    if (level <= 1) return 0;
-    int total = 0;
-    for (int i = 1; i < level; i++) {
-      total += i * 8;
-    }
-    return total;
-  }
-
-  int get _currentLevel {
-    int level = 1;
-    for (int i = 2; i <= 100; i++) {
-      if (_totalDiamonds >= _thresholdForLevel(i)) {
-        level = i;
-      } else {
-        break;
-      }
-    }
-    return level;
-  }
-
-  String get _rankTitle {
-    final int rankIndex = ((_currentLevel - 1) ~/ 10).clamp(
-      0,
-      _rankTitles.length - 1,
-    );
-    return _rankTitles[rankIndex];
-  }
-
-  String _getBadgeName() => "Nv.$_currentLevel - $_rankTitle";
-
-  String _getBadgeForDiamonds(int diamonds) {
-    int level = 1;
-    for (int i = 2; i <= 100; i++) {
-      if (diamonds >= _thresholdForLevel(i)) {
-        level = i;
-      } else {
-        break;
-      }
-    }
-    final int rankIndex = ((level - 1) ~/ 10).clamp(0, _rankTitles.length - 1);
-    return "Nv.$level - ${_rankTitles[rankIndex]}";
-  }
-
-  // Returns [threshold, label] or null if max level
-  List<dynamic>? get _nextLevel {
-    final int level = _currentLevel;
-    if (level >= 100) return null;
-    final int nextThreshold = _thresholdForLevel(level + 1);
-    final int nextRankIndex = (level ~/ 10).clamp(0, _rankTitles.length - 1);
-    return [nextThreshold, "Nv.${level + 1} - ${_rankTitles[nextRankIndex]}"];
-  }
-
-  double get _levelProgress {
-    final int level = _currentLevel;
-    if (level >= 100) return 1.0;
-    final int current = _thresholdForLevel(level);
-    final int next = _thresholdForLevel(level + 1);
-    return ((_totalDiamonds - current) / (next - current)).clamp(0.0, 1.0);
-  }
 
   @override
   void initState() {
@@ -127,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
-    _selectedLesson = _database[_selectedSubject]!.first;
     _loadProgress();
     MemoireService().addListener(_surMemoire);
     MemoireService().charger();
@@ -137,7 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
-  // ── Mémoire par question : Révision du jour et maîtrise ──────────────────
+  @override
+  void dispose() {
+    MemoireService().removeListener(_surMemoire);
+    _confettiController.dispose();
+    _diamantsNotif.dispose();
+    SoundService().dispose();
+    super.dispose();
+  }
+
+  // ── Données ──────────────────────────────────────────────────────────────
+  List<LeconRef> get _toutes => aplatir(_database);
+
   List<RefQuestion> get _toutesQuestions => [
     for (final lessons in _database.values)
       for (final l in lessons) ...questionsDeLecon(l),
@@ -145,35 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Memoire get _memoire => MemoireService().memoire;
 
-  /// Récompense fixe, une seule fois par jour (pas de diamant par question).
-  Future<int> _recompenseRevision() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = _memoire.aujourdhui;
-    if (prefs.getString('revision_diamants_jour') == today) return 0;
-    await prefs.setString('revision_diamants_jour', today);
-    if (!mounted) return 0;
-    _handleSuccess(kDiamantsRevision, combo: false);
-    return kDiamantsRevision;
-  }
-
-  void _ouvrirRevision() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RevisionView(
-          questions: _memoire.dues(_toutesQuestions),
-          onTerminee: _recompenseRevision,
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    MemoireService().removeListener(_surMemoire);
-    _confettiController.dispose();
-    SoundService().dispose();
-    super.dispose();
-  }
+  List<bool> _etoilesDe(String titre) =>
+      _lessonsRewards[titre] ?? [false, false, false];
 
   void _loadProgress() async {
     final prefs = await SharedPreferences.getInstance();
@@ -192,8 +117,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }
           for (final lesson in lessons) {
             // Éviter les doublons avec les leçons initiales
-            final alreadyExists = _database[matiere]!
-                .any((l) => l.titre == lesson.titre);
+            final alreadyExists = _database[matiere]!.any(
+              (l) => l.titre == lesson.titre,
+            );
             if (!alreadyExists) {
               _database[matiere]!.add(lesson);
             }
@@ -204,17 +130,16 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
+      _derniereImportee = prefs.getString('derniere_lecon_importee');
       _totalDiamonds = prefs.getInt('emile_diamonds') ?? 0;
       _database.forEach((matiere, lessons) {
         for (var l in lessons) {
-          bool? star1 = prefs.getBool('${l.titre}_star_astuces');
-          bool? star2 = prefs.getBool('${l.titre}_star_train');
-          bool? star3 = prefs.getBool('${l.titre}_star_quiz');
           _lessonsRewards[l.titre] = [
-            star1 ?? false,
-            star2 ?? false,
-            star3 ?? false,
+            prefs.getBool('${l.titre}_star_astuces') ?? false,
+            prefs.getBool('${l.titre}_star_train') ?? false,
+            prefs.getBool('${l.titre}_star_quiz') ?? false,
           ];
         }
       });
@@ -247,6 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ── Récompenses (inchangées) ─────────────────────────────────────────────
   void _unlockLessonStar(String lessonTitle, int starIndex) async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -292,7 +218,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleSuccess(int gain, {bool combo = true}) {
-    final String badgeBefore = _getBadgeForDiamonds(_totalDiamonds);
+    final String badgeBefore = badgePour(_totalDiamonds);
     setState(() {
       if (gain == 1 && combo) {
         _currentCombo++;
@@ -305,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
         (prefs) => prefs.setInt('emile_diamonds', _totalDiamonds),
       );
     });
-    final String badgeAfter = _getBadgeForDiamonds(_totalDiamonds);
+    final String badgeAfter = badgePour(_totalDiamonds);
     if (badgeAfter != badgeBefore) {
       _celebrateLevelUp(badgeAfter);
     }
@@ -355,9 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: LaboPalette.or,
                 foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: LaboShape.card,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
               ),
               child: const Text(
                 "Super ! 🚀",
@@ -370,111 +294,184 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _onSubjectChanged(String newSubject) {
+  // ── Révision ─────────────────────────────────────────────────────────────
+  /// Récompense fixe, une seule fois par jour (pas de diamant par question).
+  Future<int> _recompenseRevision() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = _memoire.aujourdhui;
+    if (prefs.getString('revision_diamants_jour') == today) return 0;
+    await prefs.setString('revision_diamants_jour', today);
+    if (!mounted) return 0;
+    _handleSuccess(kDiamantsRevision, combo: false);
+    return kDiamantsRevision;
+  }
+
+  void _ouvrirRevision() {
+    Navigator.of(context).push(
+      RouteRapide(
+        builder: (_) => RevisionView(
+          questions: _memoire.dues(_toutesQuestions),
+          onTerminee: _recompenseRevision,
+        ),
+      ),
+    );
+  }
+
+  /// « Réviser quand même » : les 12 questions les plus faibles, sans diamants.
+  void _ouvrirRevisionLibre() {
+    Navigator.of(context).push(
+      RouteRapide(
+        builder: (_) => RevisionView(
+          questions: _memoire.plusFaibles(_toutesQuestions),
+          onTerminee: () async => 0,
+          libre: true,
+        ),
+      ),
+    );
+  }
+
+  // ── Leçons ───────────────────────────────────────────────────────────────
+  LeconRef? get _leconDuSoir => choisirLeconDuSoir(
+    _toutes,
+    _initialTitles,
+    derniereImportee: _derniereImportee,
+  );
+
+  /// Page d'une leçon (depuis « Leçons »).
+  void _ouvrirHub(LeconRef r) {
+    if (_navEnCours) return; // un 2e appui rapide n'ouvre pas deux pages
+    _navEnCours = true;
+    Navigator.of(context)
+        .push(
+          RouteRapide(
+            builder: (_) => LeconHubScreen(
+              lecon: r,
+              etoiles: () => _etoilesDe(r.lecon.titre),
+              maitrise: () => _memoire.maitrise(questionsDeLecon(r.lecon)),
+              nbARevoir: () => nbARevoirLecon(_memoire, r.lecon),
+              lancer: (etapes, {required complet}) =>
+                  _lancerParcours(r, etapes, complet: complet),
+            ),
+          ),
+        )
+        .then((_) {
+          _navEnCours = false;
+          if (mounted) setState(() {});
+        });
+  }
+
+  /// Lance un parcours guidé (leçon complète ou étape isolée).
+  Future<void> _lancerParcours(
+    LeconRef r,
+    List<int> etapes, {
+    required bool complet,
+    int depart = 0,
+  }) {
+    if (etapes.isEmpty) return Future.value();
+    if (_navParcours) return Future.value();
+    _navParcours = true;
+    return Navigator.of(context)
+        .push(
+          RouteRapide(
+            builder: (_) => ParcoursScreen(
+              lesson: r.lecon,
+              etapes: etapes,
+              depart: depart,
+              complet: complet,
+              confetti: _confettiController,
+              etoiles: () => _etoilesDe(r.lecon.titre),
+              diamants: _diamantsNotif,
+              onDiamondEarned: () => _awardDeckDiamond(r.lecon.titre),
+              onEtoile: (i) => _unlockLessonStar(r.lecon.titre, i),
+              onSuccess: _handleSuccess,
+              onFailure: _handleFailure,
+              onRetourAccueil: () {
+                if (mounted) setState(() => _currentIndex = 0);
+              },
+            ),
+          ),
+        )
+        .then((_) {
+          _navParcours = false;
+          if (mounted) setState(() {});
+        });
+  }
+
+  void _continuerLeconDuSoir() {
+    final r = _leconDuSoir;
+    if (r == null) return;
+    final etapes = etapesDisponibles(r.lecon);
+    _lancerParcours(
+      r,
+      etapes,
+      complet: true,
+      depart: departParcours(etapes, _etoilesDe(r.lecon.titre)),
+    );
+  }
+
+  /// Ajouter une leçon : code parent d'abord, puis collage du JSON.
+  Future<void> _ajouterLecon() async {
+    final ok = await demanderCodeParent(context);
+    if (!ok || !mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => ImportLeconView(onLessonImported: _surImport),
+    );
+  }
+
+  void _surImport(String matiere, LessonModel newLesson) {
     setState(() {
-      _selectedSubject = newSubject;
-      _selectedLesson = _database[_selectedSubject]!.first;
+      if (!_database.containsKey(matiere)) _database[matiere] = [];
+      _database[matiere]!.add(newLesson);
+      _derniereImportee = newLesson.titre;
+      _lessonsRewards[newLesson.titre] = [false, false, false];
+    });
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString('derniere_lecon_importee', newLesson.titre),
+    );
+    _saveCustomLessons().then((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
+            backgroundColor: LaboPalette.good,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     });
   }
 
-  void _checkParentAccess() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? savedPin = prefs.getString('parent_pin');
-    if (savedPin == null) {
-      _showSetupPinDialog(prefs);
-    } else {
-      _showVerifyPinDialog();
-    }
+  void _supprimerLecon(String titre) {
+    Navigator.pop(context); // ferme l'Espace Parent
+    setState(() {
+      for (final m in _database.keys.toList()) {
+        _database[m]!.removeWhere((l) => l.titre == titre);
+        if (_database[m]!.isEmpty) _database.remove(m);
+      }
+      _lessonsRewards.remove(titre);
+      if (_database.isEmpty) {
+        // Réinitialiser avec une copie indépendante (pas une référence partagée)
+        for (final e in InitialDatabase.data.entries) {
+          _database[e.key] = List<LessonModel>.from(e.value);
+        }
+      }
+      if (_matiereFiltre != null && !_database.containsKey(_matiereFiltre)) {
+        _matiereFiltre = null;
+      }
+    });
+    _saveCustomLessons();
   }
 
-  void _showSetupPinDialog(SharedPreferences prefs) {
-    final TextEditingController pinSetupController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("🆕 Code PIN Parent"),
-        content: TextField(
-          controller: pinSetupController,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 4,
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            hintText: "••••",
-            counterText: "",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              final pin = pinSetupController.text.trim();
-              if (pin.length == 4 && int.tryParse(pin) != null) {
-                await prefs.setString('parent_pin', pin);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  _openParentSettings();
-                }
-              }
-            },
-            child: const Text("CRÉER"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showVerifyPinDialog() {
-    final TextEditingController pinVerifyController = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("🔒 Accès Parent"),
-        content: TextField(
-          controller: pinVerifyController,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 4,
-          autofocus: true,
-          textAlign: TextAlign.center,
-          decoration: const InputDecoration(
-            hintText: "••••",
-            counterText: "",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              final actualPin = prefs.getString('parent_pin') ?? "1234";
-              if (pinVerifyController.text == actualPin) {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  _openParentSettings();
-                }
-              } else {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("❌ Code PIN incorrect !"),
-                      backgroundColor: LaboPalette.rouge,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text("VALIDER"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openParentSettings() {
+  // ── Espace Parent ────────────────────────────────────────────────────────
+  Future<void> _ouvrirParent() async {
+    final ok = await demanderCodeParent(context);
+    if (!ok || !mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -484,7 +481,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       builder: (context) => ParentView(
         currentDiamonds: _totalDiamonds,
-        currentLessonTitle: _selectedLesson.titre,
         infoMemoire: () {
           final refs = _toutesQuestions;
           return "${_memoire.nombreSuiviesParmi(refs)} questions suivies, "
@@ -518,473 +514,82 @@ class _HomeScreenState extends State<HomeScreen> {
             });
           });
         },
-        onLessonImported: (matiere, newLesson) {
-          setState(() {
-            if (!_database.containsKey(matiere)) _database[matiere] = [];
-            _database[matiere]!.add(newLesson);
-            _selectedSubject = matiere;
-            _selectedLesson = newLesson;
-            _lessonsRewards[newLesson.titre] = [false, false, false];
-          });
-          _saveCustomLessons().then((_) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('✅ Leçon « ${newLesson.titre} » sauvegardée !'),
-                  backgroundColor: LaboPalette.good,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            }
-          });
-        },
-        onDeleteCurrentLesson: () {
-          Navigator.pop(context);
-          setState(() {
-            final List<LessonModel>? lessons = _database[_selectedSubject];
-            if (lessons == null) return;
-            lessons.removeWhere((l) => l.titre == _selectedLesson.titre);
-            _lessonsRewards.remove(_selectedLesson.titre);
-            if (lessons.isEmpty) {
-              _database.remove(_selectedSubject);
-              if (_database.isNotEmpty) {
-                _selectedSubject = _database.keys.first;
-                _selectedLesson = _database[_selectedSubject]!.first;
-              } else {
-                // Réinitialiser avec une copie indépendante (pas une référence partagée)
-                for (final e in InitialDatabase.data.entries) {
-                  _database[e.key] = List<LessonModel>.from(e.value);
-                }
-                _selectedSubject = _database.keys.first;
-                _selectedLesson = _database[_selectedSubject]!.first;
-              }
-            } else {
-              _selectedLesson = lessons.first;
-            }
-          });
-          _saveCustomLessons();
-        },
+        titresLecons: [for (final r in _toutes) r.lecon.titre],
+        onDeleteLesson: _supprimerLecon,
       ),
     );
+  }
+
+  // ── Écran ────────────────────────────────────────────────────────────────
+  Widget _page() {
+    switch (_currentIndex) {
+      case 0:
+        final soir = _leconDuSoir;
+        return AujourdhuiView(
+          diamants: _totalDiamonds,
+          leconDuSoir: soir,
+          etoiles: soir == null ? const [false, false, false] : _etoilesDe(soir.lecon.titre),
+          nbARevoir: _memoire.nombreDues(_toutesQuestions),
+          nbSuivies: _memoire.nombreSuiviesParmi(_toutesQuestions),
+          onContinuer: _continuerLeconDuSoir,
+          onRevision: _ouvrirRevision,
+          onRevisionLibre: _ouvrirRevisionLibre,
+        );
+      case 1:
+        return LeconsView(
+          toutes: _toutes,
+          matiereChoisie: _matiereFiltre,
+          onMatiere: (m) => setState(() => _matiereFiltre = m),
+          etoilesDe: _etoilesDe,
+          maitriseDe: (r) => _memoire.maitrise(questionsDeLecon(r.lecon)),
+          nbARevoirDe: (r) => nbARevoirLecon(_memoire, r.lecon),
+          onOuvrir: _ouvrirHub,
+          onAjouter: _ajouterLecon,
+          onParent: _ouvrirParent,
+        );
+      default:
+        final toutes = _toutes;
+        return TropheesView(
+          stats: calculerStats(
+            diamants: _totalDiamonds,
+            combo: _currentCombo,
+            etoilesParLecon: [
+              for (final r in toutes) _etoilesDe(r.lecon.titre),
+            ],
+          ),
+        );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<LessonModel> availableLessons =
-        _database[_selectedSubject] ?? [];
-    final List<bool> currentStars =
-        _lessonsRewards[_selectedLesson.titre] ?? [false, false, false];
-    final bool isLessonPerfect = currentStars.every((s) => s);
-    final List<dynamic>? nextLevel = _nextLevel;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
+      backgroundColor: LaboPalette.paper,
+      body: SafeArea(
+        child: Stack(
           children: [
-            Text(
-              _getBadgeName(),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontSize: 15,
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: _page(),
               ),
             ),
-            const Text(
-              'v1.3.1',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 10,
-              ),
-            ),
+            ConfettiCouche(controller: _confettiController),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white),
-            onPressed: _checkParentAccess,
-          ),
-        ],
       ),
-      body: Stack(
-        alignment: Alignment.topCenter,
-        children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. BARRE DE PROGRESSION GLOBALE
-              Container(
-                color: Colors.blue.shade50,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12.0,
-                  vertical: 4,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Text("💎", style: TextStyle(fontSize: 14)),
-                            const SizedBox(width: 4),
-                            Text(
-                              "$_totalDiamonds",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Colors.purple,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _currentCombo >= 5
-                                ? LaboPalette.warn
-                                : Colors.blue.shade200,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            _currentCombo >= 5
-                                ? "🔥 COMBO x3 : $_currentCombo"
-                                : "🔥 Combo : $_currentCombo",
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: _levelProgress,
-                        minHeight: 5,
-                        backgroundColor: Colors.blue.shade100,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          nextLevel == null
-                              ? LaboPalette.or
-                              : Colors.blue.shade400,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      nextLevel == null
-                          ? "🏆 Niveau maximum atteint !"
-                          : "Prochain : ${nextLevel[1]} à ${nextLevel[0]} 💎",
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 2. ETOILES DE LA LECON
-              Container(
-                height: 36,
-                color: Colors.orange.shade50,
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isLessonPerfect
-                          ? "👑 Leçon Maîtrisée !"
-                          : "✨ Étoiles de la leçon :",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Colors.orange.shade900,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Text(
-                          currentStars[0] ? "🃏⭐" : "🃏☆",
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          currentStars[1] ? "🎯⭐" : "🎯☆",
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          currentStars[2] ? "⏱️⭐" : "⏱️☆",
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // 3. SELECTION MATIERE / LECON
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12.0,
-                  vertical: 4.0,
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "🎓 Matière :",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
-                        ),
-                        DropdownButton<String>(
-                          value: _selectedSubject,
-                          icon: const Icon(
-                            Icons.school,
-                            color: LaboPalette.encre,
-                            size: 20,
-                          ),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onChanged: (val) => _onSubjectChanged(val!),
-                          items: _database.keys.map<DropdownMenuItem<String>>((
-                            String subject,
-                          ) {
-                            return DropdownMenuItem<String>(
-                              value: subject,
-                              child: Text(subject),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "📝 Leçon :",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey,
-                            fontSize: 13,
-                          ),
-                        ),
-                        DropdownButton<LessonModel>(
-                          value: _selectedLesson,
-                          icon: const Icon(
-                            Icons.arrow_right,
-                            color: LaboPalette.warn,
-                            size: 20,
-                          ),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: LaboPalette.warn,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onChanged: (val) =>
-                              setState(() => _selectedLesson = val!),
-                          items: availableLessons
-                              .map<DropdownMenuItem<LessonModel>>((
-                                LessonModel lesson,
-                              ) {
-                                bool isPerfect =
-                                    _lessonsRewards[lesson.titre]?.every(
-                                      (b) => b,
-                                    ) ??
-                                    false;
-                                return DropdownMenuItem<LessonModel>(
-                                  value: lesson,
-                                  child: Text(
-                                    isPerfect
-                                        ? "👑 ${lesson.titre}"
-                                        : lesson.titre,
-                                  ),
-                                );
-                              })
-                              .toList(),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // 3 bis. RÉVISION DU JOUR + MAÎTRISE DE LA LEÇON
-              _buildRevisionBar(),
-
-              // 4. ZONE DE JEU
-              Expanded(child: _buildCurrentScreenContent()),
-            ],
-          ),
-
-          // CONFETTIS
-          ConfettiWidget(
-            confettiController: _confettiController,
-            blastDirectionality: BlastDirectionality.explosive,
-            numberOfParticles: 30,
-            gravity: 0.2,
-            emissionFrequency: 0.05,
-            colors: const [
-              LaboPalette.encre,
-              LaboPalette.warn,
-              LaboPalette.good,
-              Colors.yellow,
-              Colors.purple,
-              LaboPalette.rouge,
-            ],
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        selectedItemColor: Colors.blue[700],
-        unselectedItemColor: Colors.grey,
-        selectedFontSize: 11,
-        unselectedFontSize: 11,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.style, size: 22),
-            label: 'Astuces',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center, size: 22),
-            label: 'Entraînement',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.timer, size: 22),
-            label: 'Défi Chrono',
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.today), label: 'Aujourd\'hui'),
+          NavigationDestination(icon: Icon(Icons.menu_book), label: 'Leçons'),
+          NavigationDestination(
+            icon: Icon(Icons.emoji_events),
+            label: 'Trophées',
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildRevisionBar() {
-    final int nbDues = _memoire.nombreDues(_toutesQuestions);
-    final double maitrise = _memoire.maitrise(
-      questionsDeLecon(_selectedLesson),
-    );
-    final int pct = (maitrise * 100).round();
-    return Container(
-      color: LaboPalette.paper,
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: ElevatedButton(
-                onPressed: _ouvrirRevision,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: nbDues > 0
-                      ? LaboPalette.encre
-                      : Colors.blueGrey.shade300,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "🔁 Révision du jour",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    Text(
-                      nbDues > 0
-                          ? "$nbDues à revoir aujourd'hui"
-                          : "Rien à revoir, bravo ! 🎉",
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 92,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "🧠 Maîtrise $pct %",
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: LaboPalette.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: maitrise,
-                    minHeight: 6,
-                    backgroundColor: LaboPalette.line,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      pct >= 80 ? LaboPalette.good : LaboPalette.encre,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentScreenContent() {
-    switch (_currentIndex) {
-      case 0:
-        return FlashcardsView(
-          lesson: _selectedLesson,
-          onDiamondEarned: () => _awardDeckDiamond(_selectedLesson.titre),
-          onLessonCompleted: () => _unlockLessonStar(_selectedLesson.titre, 0),
-        );
-      case 1:
-        return ExerciseView(
-          lesson: _selectedLesson,
-          onSuccess: () => _handleSuccess(1),
-          onFailure: _handleFailure,
-          onPerfectScore: () => _unlockLessonStar(_selectedLesson.titre, 1),
-        );
-      case 2:
-        return QuizView(
-          lesson: _selectedLesson,
-          onSuccess: (gain) => _handleSuccess(gain),
-          onFailure: _handleFailure,
-          onPerfectQuiz: () => _unlockLessonStar(_selectedLesson.titre, 2),
-        );
-      default:
-        return const Center(child: Text("Erreur"));
-    }
   }
 }
