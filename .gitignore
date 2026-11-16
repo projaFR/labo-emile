@@ -47,3 +47,4 @@ app.*.map.json
 
 captures/
 dist/
+/android/build/
