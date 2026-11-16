@@ -1,7 +1,7 @@
+# Lancement manuel seulement : la clé debug change à chaque build, cet APK ne permet pas les mises à jour (voir README, compilation locale).
 name: Build APK
 on:
-  push:
-    branches: [ master ]
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -46,3 +46,5 @@ app.*.map.json
 *.apk
 
 captures/
+dist/
+/android/build/

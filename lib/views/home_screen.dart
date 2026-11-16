@@ -10,6 +10,7 @@ import '../logic/seance_logic.dart';
 import '../logic/trophees_logic.dart';
 import '../models/lesson_model.dart';
 import '../services/memoire_service.dart';
+import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 import '../theme.dart';
 import '../widgets/confetti_couche.dart';
@@ -90,7 +91,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Données ──────────────────────────────────────────────────────────────
   List<LeconRef> get _toutes => aplatir(_database);
 
-  List<RefQuestion> get _toutesQuestions => [
+  // Gardé en cache : recalculé seulement quand les leçons changent
+  // (chargement, import, suppression), pas à chaque reconstruction.
+  List<RefQuestion>? _cacheQuestions;
+  List<RefQuestion> get _toutesQuestions => _cacheQuestions ??= [
     for (final lessons in _database.values)
       for (final l in lessons) ...questionsDeLecon(l),
   ];
@@ -132,6 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
     setState(() {
+      _cacheQuestions = null;
       _derniereImportee = prefs.getString('derniere_lecon_importee');
       _totalDiamonds = prefs.getInt('emile_diamonds') ?? 0;
       _database.forEach((matiere, lessons) {
@@ -144,6 +149,22 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
     });
+  }
+
+  /// Après une restauration : repart des leçons de base et relit tout.
+  Future<void> _rechargerApresRestauration() async {
+    _database
+      ..clear()
+      ..addAll({
+        for (final e in InitialDatabase.data.entries)
+          e.key: List<LessonModel>.from(e.value),
+      });
+    _lessonsRewards.clear();
+    _currentCombo = 0;
+    _matiereFiltre = null;
+    await SettingsService().load();
+    await MemoireService().charger(forcer: true);
+    _loadProgress();
   }
 
   Future<void> _saveCustomLessons() async {
@@ -426,6 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _surImport(String matiere, LessonModel newLesson) {
     setState(() {
+      _cacheQuestions = null;
       if (!_database.containsKey(matiere)) _database[matiere] = [];
       _database[matiere]!.add(newLesson);
       _derniereImportee = newLesson.titre;
@@ -450,6 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _supprimerLecon(String titre) {
     Navigator.pop(context); // ferme l'Espace Parent
     setState(() {
+      _cacheQuestions = null;
       for (final m in _database.keys.toList()) {
         _database[m]!.removeWhere((l) => l.titre == titre);
         if (_database[m]!.isEmpty) _database.remove(m);
@@ -487,6 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
               "${_memoire.nombreDues(refs)} à revoir aujourd'hui";
         },
         onResetMemoire: () => MemoireService().reinitialiser(),
+        onRestauree: _rechargerApresRestauration,
         onDiamondsChanged: (amount) {
           setState(() {
             _totalDiamonds += amount;
