@@ -181,7 +181,13 @@ class _LaunchScreenState extends State<LaunchScreen>
                             ],
                           ),
                           child: const Center(
-                            child: Text('🔬', style: TextStyle(fontSize: 60)),
+                            // Icône Material (police embarquée) : pas de
+                            // glyphe manquant au chargement sur le web.
+                            child: Icon(
+                              Icons.biotech,
+                              size: 64,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
