@@ -390,5 +390,52 @@ Future<void> main() async {
   assert(cheminsAppeles.length == 4 && cheminsAppeles[3].contains('gemini-3.0-flash'));
   reinitialiserModeleGeminiCache();
 
+  // 5e. Modèles *-image exclus + thinkingConfig: 0 envoyé + repli sans thinkingConfig sur 400.
+  assert(
+    !classerModelesGeminiDisponibles([
+      {
+        'name': 'models/gemini-2.5-flash-image',
+        'supportedGenerationMethods': ['generateContent'],
+      },
+      {
+        'name': 'models/gemini-2.5-flash',
+        'supportedGenerationMethods': ['generateContent'],
+      },
+    ]).contains('gemini-2.5-flash-image'),
+  );
+
+  var appelsThinking = 0;
+  final clientRepliThinking = MockClient((req) async {
+    appelsThinking++;
+    final body = jsonDecode(req.body) as Map<String, dynamic>;
+    final genCfg = body['generationConfig'] as Map<String, dynamic>;
+    if (appelsThinking == 1) {
+      assert((genCfg['thinkingConfig'] as Map)['thinkingBudget'] == 0);
+      return http.Response('{"error":{"status":"INVALID_ARGUMENT"}}', 400);
+    }
+    assert(!genCfg.containsKey('thinkingConfig'));
+    return http.Response(
+      jsonEncode({
+        'candidates': [
+          {
+            'content': {
+              'parts': [
+                {'text': _jsonExemple()},
+              ],
+            },
+          },
+        ],
+      }),
+      200,
+      headers: {'content-type': 'application/json; charset=utf-8'},
+    );
+  });
+  final rThinking = await genererLeconDepuisPhotos(
+    apiKey: 'AIzaCleTest',
+    photos: [photo],
+    client: clientRepliThinking,
+  );
+  assert(appelsThinking == 2 && rThinking.lecon.titre == 'Le pluriel des noms en -ou');
+
   stdout.writeln('OK: toutes les assertions des lots 1 et 2 ont reussi.');
 }

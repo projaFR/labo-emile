@@ -33,6 +33,7 @@ const List<String> _motsExclusModeleGemini = [
   'robotics',
   'computer-use',
   'thinking',
+  'image',
 ];
 
 /// Classe les modèles retournés par `/v1beta/models` pour choisir le meilleur
@@ -149,8 +150,8 @@ Règles strictes :
    - "matiere" : une parmi ["Mathématiques", "Français", "Sciences", "Histoire", "Géographie", "Anglais"].
    - "titre" : titre CLASSIQUE et scolaire de la leçon (ex : "Le pluriel des noms en -ou", "Multiplier par 10, 100, 1000").
    - "succes" : 1 emoji suivi d'un espace puis d'un petit nom de badge RIGOLO et valorisant lié au thème de la leçon (ex : "🦉 Dompteur de Hiboux à Genoux", "🚀 Pilote des Grands Nombres").
-   - "astuces" : liste de 3 à 8 cartes {"question": "...", "reponse": "..."} résumant les règles et exemples de la feuille avec les mots exacts enseignés en classe.
-   - "exercices" : liste de 12 à 18 exercices de difficulté progressive (découverte, entraînement, défi), tous reliés aux notions de la leçon :
+   - "astuces" : liste de 4 à 6 cartes courtes {"question": "...", "reponse": "..."} résumant les règles et exemples de la feuille avec les mots exacts enseignés en classe.
+   - "exercices" : liste de 10 exercices de difficulté progressive (découverte, entraînement, défi), tous reliés aux notions de la leçon :
        * Pour une réponse numérique / calcul :
          - mets un ou plusieurs "[?]" dans "question",
          - laisse "options" vide ("options": []),
@@ -163,7 +164,7 @@ Règles strictes :
          - INTERDIT d'inventer des mots mal orthographiés dans les options (utilise d'autres vrais mots français ou des erreurs de règle plausibles).
        * Champs de chaque exercice : "question", "consigne", "reponseAttendue", "reponsesMultiples", "options", "astuceErreur".
        * "astuceErreur" : indice court (moins de 15 mots) qui aide à réfléchir sans jamais donner la réponse.
-   - "quiz" : liste de 5 à 10 questions courtes (lisibles en moins de 5 s) pour le Défi Chrono :
+   - "quiz" : liste de 5 questions courtes (lisibles en moins de 5 s) pour le Défi Chrono :
        {"question": "...", "options": ["...", "...", "...", "..."], "indexCorrect": 0} (indexCorrect entre 0 et 3).
 ''';
 
@@ -173,7 +174,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
   required List<PhotoLecon> photos,
   String commentaireParent = '',
   http.Client? client,
-  Duration timeout = const Duration(seconds: 60),
+  Duration timeout = const Duration(seconds: 120),
 }) async {
   final cle = apiKey.trim();
   if (cle.isEmpty) {
@@ -333,6 +334,7 @@ Future<String> _appelerGemini({
   required String apiKey,
   required List<Map<String, dynamic>> contents,
   required Duration timeout,
+  bool desactiverThinking = true,
 }) async {
   final uri = Uri.https(
     'generativelanguage.googleapis.com',
@@ -348,6 +350,7 @@ Future<String> _appelerGemini({
     'generationConfig': {
       'responseMimeType': 'application/json',
       'temperature': 0.3,
+      if (desactiverThinking) 'thinkingConfig': {'thinkingBudget': 0},
     },
   });
 
@@ -370,6 +373,19 @@ Future<String> _appelerGemini({
   } catch (_) {
     throw const ErreurGeminiLecon(
       'Impossible de joindre Gemini. Vérifie la connexion internet.',
+    );
+  }
+
+  if (res.statusCode == 400 &&
+      desactiverThinking &&
+      !res.body.toUpperCase().contains('API_KEY_INVALID')) {
+    return _appelerGemini(
+      client: client,
+      modele: modele,
+      apiKey: apiKey,
+      contents: contents,
+      timeout: timeout,
+      desactiverThinking: false,
     );
   }
 

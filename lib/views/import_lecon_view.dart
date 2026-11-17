@@ -231,7 +231,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
                   onPressed: _enCours ? null : _saisirCleSurPlace,
                   icon: const Icon(Icons.key),
                   label: const Text(
-                    '🔑 Enregistrer ma clé Gemini gratuite',
+                    'Enregistrer ma clé Gemini gratuite',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -253,7 +253,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
                       ? null
                       : _prendrePhoto,
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text('📷 Prendre en photo'),
+                  label: const Text('Prendre en photo'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -263,7 +263,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
                       ? null
                       : _choisirImages,
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('🖼️ Galerie'),
+                  label: const Text('Galerie'),
                 ),
               ),
             ],
@@ -272,7 +272,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
           OutlinedButton.icon(
             onPressed: (limiteAtteinte || _enCours) ? null : _choisirImages,
             icon: const Icon(Icons.folder_open),
-            label: const Text('📁 Choisir une photo de la leçon'),
+            label: const Text('Choisir une photo de la leçon'),
           ),
         if (_photos.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -342,7 +342,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
                 : _fabriquerAvecGemini,
             icon: const Icon(Icons.auto_awesome),
             label: const Text(
-              '✨ Fabriquer la leçon avec Gemini',
+              'Fabriquer la leçon avec Gemini',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
             style: ElevatedButton.styleFrom(

@@ -79,8 +79,9 @@ Future<List<PhotoLecon>> _choisirImagesWindows() async {
       if (propre.isEmpty) continue;
       final f = File(propre);
       if (!f.existsSync()) continue;
-      final octets = await f.readAsBytes();
-      if (octets.isEmpty) continue;
+      final brut = await f.readAsBytes();
+      if (brut.isEmpty) continue;
+      final octets = await _reduireImageWindowsSiBesoin(propre, brut);
       final nom = f.uri.pathSegments.isNotEmpty
           ? f.uri.pathSegments.last
           : 'image.jpg';
@@ -95,5 +96,71 @@ Future<List<PhotoLecon>> _choisirImagesWindows() async {
     return sorties;
   } catch (_) {
     return const [];
+  }
+}
+
+Future<Uint8List> _reduireImageWindowsSiBesoin(
+  String chemin,
+  Uint8List brut,
+) async {
+  if (brut.length <= 600 * 1024) return brut;
+  const script = r'''
+Add-Type -AssemblyName System.Drawing
+$src = [System.Drawing.Image]::FromFile($env:LABO_IMG_PATH)
+try {
+  $max = 1600
+  $w = $src.Width
+  $h = $src.Height
+  if ($w -gt $max -or $h -gt $max) {
+    $ratio = [Math]::Min($max / $w, $max / $h)
+    $nw = [Math]::Max(1, [int][Math]::Round($w * $ratio))
+    $nh = [Math]::Max(1, [int][Math]::Round($h * $ratio))
+  } else {
+    $nw = $w
+    $nh = $h
+  }
+  $bmp = New-Object System.Drawing.Bitmap($nw, $nh)
+  try {
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    try {
+      $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $g.DrawImage($src, 0, 0, $nw, $nh)
+    } finally {
+      $g.Dispose()
+    }
+    $ms = New-Object System.IO.MemoryStream
+    try {
+      $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+        Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+      $ep = New-Object System.Drawing.Imaging.EncoderParameters(1)
+      $ep.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter(
+        [System.Drawing.Imaging.Encoder]::Quality, [long]85
+      )
+      $bmp.Save($ms, $codec, $ep)
+      [Convert]::ToBase64String($ms.ToArray())
+    } finally {
+      $ms.Dispose()
+    }
+  } finally {
+    $bmp.Dispose()
+  }
+} finally {
+  $src.Dispose()
+}
+''';
+  try {
+    final res = await Process.run(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      environment: {'LABO_IMG_PATH': chemin},
+      stdoutEncoding: utf8,
+    ).timeout(const Duration(seconds: 15));
+    if (res.exitCode != 0) return brut;
+    final b64 = (res.stdout as String).trim();
+    if (b64.isEmpty) return brut;
+    final reduit = base64Decode(b64);
+    return (reduit.isNotEmpty && reduit.length < brut.length) ? reduit : brut;
+  } catch (_) {
+    return brut;
   }
 }
