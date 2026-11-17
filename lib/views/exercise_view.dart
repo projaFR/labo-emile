@@ -191,7 +191,8 @@ class _ExerciseViewState extends State<ExerciseView> {
         ..shuffle(Random());
     } else {
       _shuffledOptions = [];
-      for (int i = 0; i < nbTrous; i++) {
+      final int nbChamps = nbTrous > 0 ? nbTrous : 1;
+      for (int i = 0; i < nbChamps; i++) {
         _controllers.add(TextEditingController());
         _focusNodes.add(FocusNode());
       }
@@ -381,8 +382,13 @@ class _ExerciseViewState extends State<ExerciseView> {
         );
       }
 
-      // N'affiche une case que pour les vrais [?] (pas le slot virtuel)
-      final bool hasSlot = isQcm ? i < nbTrous : i < _controllers.length;
+      // Affiche une case par [?], ou un champ unique à la suite pour une
+      // question numérique sans [?] (ex. « Combien de faces possède un cube ? »).
+      final bool hasSlot = isQcm
+          ? i < nbTrous
+          : (nbTrous > 0
+              ? i < _controllers.length
+              : i == 0 && _controllers.isNotEmpty);
 
       if (hasSlot) {
         if (isQcm) {
