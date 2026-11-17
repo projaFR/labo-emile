@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +26,10 @@ class LaboSyncService extends ChangeNotifier {
   /// Clés privées : absentes de `sauvegarde.dart` (jamais exportées).
   static const String kCleSessionFirebase = 'labo_firebase_session';
   static const String kCleMetaSync = 'labo_sync_meta';
+  static const String kCleOAuthFirebase = 'labo_firebase_oauth';
+
+  static const MethodChannel _canalPlateforme =
+      MethodChannel('fr.thibaut.laboemile/photo');
 
   final http.Client _httpClient = http.Client();
   late final LaboFirebaseAuth _auth = LaboFirebaseAuth(
@@ -78,11 +84,245 @@ class LaboSyncService extends ChangeNotifier {
     if (_initialise) return;
     _initialise = true;
     MemoireService().onModification = () => signalerChangementLocal();
-    final cfg = await _auth.charger();
+    var cfg = await _auth.charger();
+
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      _canalPlateforme.setMethodCallHandler((call) async {
+        if (call.method == 'sessionUsbDisponible') {
+          final raw = call.arguments as String?;
+          if (raw != null && raw.trim().isNotEmpty) {
+            await _appliquerSessionUsbB64(raw, lancerSynchro: true);
+            try {
+              await _canalPlateforme.invokeMethod<String>(
+                'consommerSessionUsb',
+              );
+            } catch (_) {}
+          }
+        }
+      });
+      try {
+        final b64 = await _canalPlateforme.invokeMethod<String>(
+          'consommerSessionUsb',
+        );
+        if (b64 != null && b64.trim().isNotEmpty) {
+          await _appliquerSessionUsbB64(b64, lancerSynchro: false);
+          cfg = _auth.config;
+        }
+      } catch (_) {}
+    }
+
     final meta = await _lireMeta();
     _derniereSyncLe = meta.derniereSyncLe;
     _etat = cfg == null ? EtatSyncLabo.nonConfigure : EtatSyncLabo.aJour;
     notifyListeners();
+  }
+
+  Future<void> _appliquerSessionUsbB64(
+    String b64, {
+    required bool lancerSynchro,
+  }) async {
+    try {
+      final jsonStr = utf8.decode(
+        base64Url.decode(base64Url.normalize(b64.trim())),
+      );
+      final session = ConfigFirebaseLabo.tryParse(jsonStr);
+      if (session == null) return;
+      await _auth.importerSession(session);
+      if (session.desktopClientId != null &&
+          session.desktopClientSecret != null) {
+        final oauth = ConfigOAuthGoogleLabo(
+          projectId: session.projectId,
+          webApiKey: session.webApiKey,
+          desktopClientId: session.desktopClientId!,
+          desktopClientSecret: session.desktopClientSecret!,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(kCleOAuthFirebase, jsonEncode(oauth.toJson()));
+      }
+      _etat = EtatSyncLabo.aJour;
+      _erreur = null;
+      notifyListeners();
+      if (lancerSynchro) {
+        unawaited(synchroniserMaintenant());
+      }
+    } catch (_) {}
+  }
+
+  Future<ConfigOAuthGoogleLabo?> detecterConfigOAuth() async {
+    final cfg = _auth.config;
+    if (cfg != null &&
+        cfg.desktopClientId != null &&
+        cfg.desktopClientSecret != null) {
+      return ConfigOAuthGoogleLabo(
+        projectId: cfg.projectId,
+        webApiKey: cfg.webApiKey,
+        desktopClientId: cfg.desktopClientId!,
+        desktopClientSecret: cfg.desktopClientSecret!,
+      );
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final saved = ConfigOAuthGoogleLabo.tryParse(
+      prefs.getString(kCleOAuthFirebase),
+    );
+    if (saved != null) return saved;
+    return chargerConfigOAuthDepuisReviser();
+  }
+
+  Future<void> connecterAvecGoogle({String? jsonConfigManuel}) async {
+    await initialiser();
+    final ConfigOAuthGoogleLabo? oauth;
+    if (jsonConfigManuel != null && jsonConfigManuel.trim().isNotEmpty) {
+      oauth = ConfigOAuthGoogleLabo.tryParse(jsonConfigManuel);
+      if (oauth == null) {
+        throw const ErreurSyncLabo(
+          'Contenu JSON firebase_config.json invalide ou incomplet.',
+        );
+      }
+    } else {
+      oauth = await detecterConfigOAuth();
+      if (oauth == null) {
+        throw const ErreurSyncLabo(
+          'Colle le contenu de firebase_config.json (ou connecte d’abord le PC puis utilise le transfert USB).',
+        );
+      }
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kCleOAuthFirebase, jsonEncode(oauth.toJson()));
+
+    _debounce?.cancel();
+    _erreur = null;
+    _etat = EtatSyncLabo.synchronisation;
+    notifyListeners();
+
+    try {
+      final idToken = await obtenirIdTokenGoogleLoopback(
+        oauthConfig: oauth,
+        ouvrirNavigateur: _ouvrirUrlNavigateur,
+        client: _httpClient,
+      );
+      await _auth.connecterAvecGoogleIdToken(
+        projectId: oauth.projectId,
+        webApiKey: oauth.webApiKey,
+        googleIdToken: idToken,
+        desktopClientId: oauth.desktopClientId,
+        desktopClientSecret: oauth.desktopClientSecret,
+      );
+    } on ErreurSyncLabo catch (e) {
+      _erreur = e.message;
+      _etat = e.horsLigne ? EtatSyncLabo.horsLigne : EtatSyncLabo.erreur;
+      notifyListeners();
+      rethrow;
+    } catch (_) {
+      const msg = 'La connexion Google a échoué.';
+      _erreur = msg;
+      _etat = EtatSyncLabo.erreur;
+      notifyListeners();
+      throw const ErreurSyncLabo(msg);
+    }
+
+    final ok = await synchroniserMaintenant();
+    if (!ok) {
+      throw ErreurSyncLabo(
+        _erreur ?? 'Connexion réussie, mais Firestore a refusé la synchro.',
+        horsLigne: _etat == EtatSyncLabo.horsLigne,
+      );
+    }
+  }
+
+  Future<bool> _ouvrirUrlNavigateur(Uri url) async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final res = await Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            r'Start-Process $env:LABO_AUTH_URL',
+          ],
+          environment: {'LABO_AUTH_URL': url.toString()},
+        );
+        return res.exitCode == 0;
+      } catch (_) {
+        return false;
+      }
+    }
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final ok = await _canalPlateforme.invokeMethod<bool>(
+          'ouvrirUrl',
+          {'url': url.toString()},
+        );
+        return ok ?? false;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// Sur Windows, pousse directement la session connectée vers le téléphone USB.
+  Future<({bool ok, String message})> envoyerSessionAuTelephoneUsb() async {
+    final cfg = _auth.config;
+    if (cfg == null) {
+      return (ok: false, message: 'Connecte d’abord le compte sur le PC.');
+    }
+    final b64 = base64UrlEncode(
+      utf8.encode(jsonEncode(cfg.toJson())),
+    ).replaceAll('=', '');
+
+    var adbExe = 'adb';
+    final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
+    if (localAppData.isNotEmpty) {
+      final candidat = '$localAppData\\Android\\Sdk\\platform-tools\\adb.exe';
+      if (File(candidat).existsSync()) {
+        adbExe = candidat;
+      }
+    }
+
+    try {
+      await Process.run(adbExe, ['start-server']);
+      await Future<void>.delayed(const Duration(seconds: 4));
+      final res = await Process.run(adbExe, [
+        'shell',
+        'am',
+        'start',
+        '-n',
+        'fr.thibaut.laboemile/.MainActivity',
+        '--es',
+        'firebase_session_b64',
+        b64,
+      ]);
+      final sortie = '${res.stdout}\n${res.stderr}';
+      if (res.exitCode == 0 && !sortie.contains('Error:')) {
+        return (
+          ok: true,
+          message:
+              'Compte Google envoyé au téléphone ! Le Labo d’Émile sur le téléphone est maintenant connecté.',
+        );
+      }
+      final bas = sortie.toLowerCase();
+      if (bas.contains('unauthorized') || bas.contains('authorizing')) {
+        return (
+          ok: false,
+          message:
+              'Téléphone non autorisé : déverrouille-le et accepte le débogage USB.',
+        );
+      }
+      if (bas.contains('no devices')) {
+        return (ok: false, message: 'Aucun téléphone détecté en USB.');
+      }
+      return (
+        ok: false,
+        message: 'Transfert USB impossible (vérifie le câble et le débogage USB).',
+      );
+    } catch (_) {
+      return (
+        ok: false,
+        message: 'Outil ADB introuvable ou transfert USB impossible.',
+      );
+    }
   }
 
   Future<void> connecterCompte({

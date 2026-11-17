@@ -53,8 +53,11 @@ service cloud.firestore {
 
 ---
 
-## 3. Mise en route (3 étapes rapides)
+## 3. Mise en route (2 étapes simples avec Google)
 
-1. **Créer le compte Labo** : dans **Console Firebase → Authentication → Sign-in method**, active **Adresse e-mail/Mot de passe**, puis dans **Users → Ajouter un utilisateur**, crée un compte dédié (ex. `labo@emile.local` avec un mot de passe de ton choix).
-2. **Publier les règles** : colle les règles ci-dessus dans **Firestore Database → Règles** et publie.
-3. **Connecter tes appareils** : dans le **Labo d'Émile → Mes leçons → ⚙️ Espace Parent → ☁️ Configurer le compte Firebase** (sur le téléphone ET sur le PC), colle ta **Clé API Web Firebase** (trouvable dans *Paramètres du projet → Général*, ou en collant le contenu de ton JSON de config Firebase), puis saisis l'e-mail et le mot de passe du compte Labo.
+1. **Publier les règles Firestore** : dans **Console Firebase → Firestore → Règles**, colle les règles ci-dessus et clique sur **Publier** *(rien à toucher dans Authentication ni dans Paramètres si tu utilises la connexion Google comme Réviser)*.
+2. **Connecter le PC puis le téléphone** :
+   - Sur le **PC**, ouvre **Le Labo d'Émile → Leçons → ⚙️ Espace Parent → ☁️ Configurer le compte Firebase** → clique sur **🔵 Se connecter avec Google (comme Réviser)** *(les identifiants de `Reviser/assets/firebase_config.json` sont détectés tout seuls à l'exécution)*.
+   - Branche le téléphone en USB et clique dans le même écran PC sur **📱 Transférer ce compte au téléphone (USB)** *(ou connecte-toi directement avec Google sur le téléphone)*.
+
+*(En secours, une connexion manuelle par e-mail/mot de passe + clé API Web reste disponible dans « Autre méthode ».)*

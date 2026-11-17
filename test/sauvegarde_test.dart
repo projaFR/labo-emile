@@ -126,6 +126,7 @@ void main() {
       kCleGeminiPrefs: 'AIzaSecretGeminiKey1234',
       LaboSyncService.kCleSessionFirebase: '{"refreshToken":"secret-rt"}',
       LaboSyncService.kCleMetaSync: '{"diamantsModifieLe":"2026-11-17"}',
+      LaboSyncService.kCleOAuthFirebase: '{"desktopClientSecret":"secret-oauth"}',
       'custom_lessons': jsonEncode({
         'Maths': [lecon.toJson()],
       }),
@@ -135,8 +136,10 @@ void main() {
     expect(t.contains('AIzaSecretGeminiKey1234'), isFalse);
     expect(t.contains(kCleGeminiPrefs), isFalse);
     expect(t.contains('secret-rt'), isFalse);
+    expect(t.contains('secret-oauth'), isFalse);
     expect(t.contains(LaboSyncService.kCleSessionFirebase), isFalse);
     expect(t.contains(LaboSyncService.kCleMetaSync), isFalse);
+    expect(t.contains(LaboSyncService.kCleOAuthFirebase), isFalse);
     expect(t.contains('🚀 Pilote'), isTrue);
 
     final v = validerSauvegarde(t);

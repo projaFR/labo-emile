@@ -47,6 +47,7 @@ class _ParentViewState extends State<ParentView> {
   late String? _titreASupprimer =
       widget.titresLecons.isEmpty ? null : widget.titresLecons.first;
   String? _cleGemini;
+  bool _envoiUsbEnCours = false;
 
   @override
   void initState() {
@@ -501,6 +502,27 @@ class _ParentViewState extends State<ParentView> {
                         ),
                       ),
                       const SizedBox(height: 6),
+                      if (Theme.of(context).platform == TargetPlatform.windows) ...[
+                        OutlinedButton.icon(
+                          onPressed: enCours || _envoiUsbEnCours
+                              ? null
+                              : () async {
+                                  setState(() => _envoiUsbEnCours = true);
+                                  final res =
+                                      await sync.envoyerSessionAuTelephoneUsb();
+                                  if (!mounted) return;
+                                  setState(() => _envoiUsbEnCours = false);
+                                  _message(res.message, erreur: !res.ok);
+                                },
+                          icon: const Icon(Icons.phone_android),
+                          label: Text(
+                            _envoiUsbEnCours
+                                ? 'Envoi vers le téléphone…'
+                                : '📱 Transférer ce compte au téléphone (USB)',
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                     ],
                     OutlinedButton.icon(
                       onPressed: enCours

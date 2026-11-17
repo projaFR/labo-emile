@@ -14,6 +14,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
@@ -31,21 +32,78 @@ class MainActivity : FlutterActivity() {
         private const val REQ_GALERIE = 2002
         private const val MAX_DIM_PX = 1800
         private const val MAX_OCTETS = 1_500_000
+        private const val EXTRA_SESSION_USB = "firebase_session_b64"
+        private const val FICHIER_SESSION_USB = "pending_firebase_session.b64"
     }
 
     private var resultatEnAttente: MethodChannel.Result? = null
+    private var canalPhoto: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        capturerSessionUsbIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        capturerSessionUsbIntent(intent)
+    }
+
+    private fun capturerSessionUsbIntent(intent: Intent?) {
+        val b64 = intent?.getStringExtra(EXTRA_SESSION_USB) ?: return
+        intent.removeExtra(EXTRA_SESSION_USB)
+        val propre = b64.trim()
+        if (propre.isEmpty()) return
+        try {
+            File(filesDir, FICHIER_SESSION_USB).writeText(propre, Charsets.UTF_8)
+        } catch (_: Exception) {}
+        runOnUiThread {
+            canalPhoto?.invokeMethod("sessionUsbDisponible", propre)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(
+        val canal = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CANAL_PHOTO,
-        ).setMethodCallHandler { call, result ->
+        )
+        canalPhoto = canal
+        canal.setMethodCallHandler { call, result ->
             when (call.method) {
                 "prendrePhoto" -> lancerCamera(result)
                 "choisirGalerie" -> lancerGalerie(result)
+                "ouvrirUrl" -> ouvrirUrlNavigateur(call.argument<String>("url"), result)
+                "consommerSessionUsb" -> result.success(consommerSessionUsb())
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun ouvrirUrlNavigateur(url: String?, result: MethodChannel.Result) {
+        if (url.isNullOrBlank()) {
+            result.success(false)
+            return
+        }
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+            result.success(true)
+        } catch (_: Exception) {
+            result.success(false)
+        }
+    }
+
+    private fun consommerSessionUsb(): String? {
+        val f = File(filesDir, FICHIER_SESSION_USB)
+        if (!f.exists()) return null
+        return try {
+            val texte = f.readText(Charsets.UTF_8).trim()
+            f.delete()
+            texte.ifEmpty { null }
+        } catch (_: Exception) {
+            null
         }
     }
 

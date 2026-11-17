@@ -1,4 +1,5 @@
 // Sans Flutter : dart --enable-asserts --packages=.dart_tool/package_config.json tool/verif_lots_3_4.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -221,6 +222,95 @@ Future<void> main() async {
   );
   final resReset = fusionnerProgression(reset, dist);
   assert(resReset.fusionnee.diamants == 0 && resReset.doitEnvoyer);
+
+  // 6. SHA-256 Dart pur, ConfigOAuthGoogleLabo, signInWithIdp & loopback OAuth2.
+  String hex(List<int> b) =>
+      b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+  assert(
+    hex(sha256Bytes(const [])) ==
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  );
+  assert(
+    hex(sha256Bytes(utf8.encode('abc'))) ==
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+  );
+
+  assert(
+    ConfigOAuthGoogleLabo.tryParse(
+          '{"projectId":"reviser-bdd1a","webApiKey":"COLLE_ICI","desktopClientId":"cid","desktopClientSecret":"csec"}',
+        ) ==
+        null,
+  );
+  final oauthCfg = ConfigOAuthGoogleLabo.tryParse(
+    '{"projectId":"reviser-bdd1a","webApiKey":"AIzaOk","desktopClientId":"cid-1","desktopClientSecret":"csec-1"}',
+  );
+  assert(oauthCfg != null && oauthCfg.desktopClientId == 'cid-1');
+  if (oauthCfg == null) throw StateError('Config OAuth invalide');
+
+  final idTokenRecu = await obtenirIdTokenGoogleLoopback(
+    oauthConfig: oauthCfg,
+    client: MockClient((req) async {
+      assert(req.url.toString() == 'https://oauth2.googleapis.com/token');
+      assert(req.bodyFields['code'] == 'auth-code-99');
+      assert(req.bodyFields['client_id'] == 'cid-1');
+      assert(req.bodyFields['client_secret'] == 'csec-1');
+      assert((req.bodyFields['code_verifier'] ?? '').isNotEmpty);
+      return http.Response(jsonEncode({'id_token': 'google-jwt-ok'}), 200);
+    }),
+    ouvrirNavigateur: (authUri) async {
+      final redir = Uri.parse(authUri.queryParameters['redirect_uri']!);
+      final state = authUri.queryParameters['state']!;
+      assert(authUri.queryParameters['code_challenge_method'] == 'S256');
+      // Le navigateur revient sur 127.0.0.1 de façon asynchrone après ouverture.
+      unawaited(() async {
+        final httpClient = HttpClient();
+        try {
+          final r = await httpClient.getUrl(
+            redir.replace(
+              queryParameters: {'code': 'auth-code-99', 'state': state},
+            ),
+          );
+          final resp = await r.close();
+          assert(resp.statusCode == 200);
+          await resp.drain<void>();
+        } finally {
+          httpClient.close();
+        }
+      }());
+      return true;
+    },
+  );
+  assert(idTokenRecu == 'google-jwt-ok');
+
+  String? savedGoogle;
+  final authGoogle = LaboFirebaseAuth(
+    lireStockage: () async => savedGoogle,
+    ecrireStockage: (v) async => savedGoogle = v,
+    client: MockClient((req) async {
+      assert(req.url.path == '/v1/accounts:signInWithIdp');
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      assert(body['postBody'] == 'id_token=google-jwt-ok&providerId=google.com');
+      return http.Response(
+        jsonEncode({
+          'localId': 'uid-g',
+          'email': 'thibaut@gmail.com',
+          'idToken': 'fb-tok-g',
+          'refreshToken': 'fb-rt-g',
+          'expiresIn': '3600',
+        }),
+        200,
+      );
+    }),
+  );
+  final cfgG = await authGoogle.connecterAvecGoogleIdToken(
+    projectId: oauthCfg.projectId,
+    webApiKey: oauthCfg.webApiKey,
+    googleIdToken: idTokenRecu,
+    desktopClientId: oauthCfg.desktopClientId,
+    desktopClientSecret: oauthCfg.desktopClientSecret,
+  );
+  assert(cfgG.email == 'thibaut@gmail.com');
+  assert(ConfigFirebaseLabo.tryParse(savedGoogle)?.desktopClientId == 'cid-1');
 
   stdout.writeln('OK: toutes les assertions des lots 3 et 4 ont reussi.');
 }
