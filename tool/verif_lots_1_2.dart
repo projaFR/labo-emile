@@ -1,4 +1,5 @@
 // Sans Flutter : dart --enable-asserts --packages=.dart_tool/package_config.json tool/verif_lots_1_2.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -302,36 +303,43 @@ Future<void> main() async {
   }
   assert(erreurQuota.contains('Limite gratuite Gemini atteinte'));
 
-  // 5d. Découverte automatique de modèle Gemini sur erreur 404.
+  // 5d. Découverte automatique de modèle Gemini (priorité flash-lite, repli 404/429/timeout).
   final classes = classerModelesGeminiDisponibles([
     {
       'name': 'models/text-embedding-004',
       'supportedGenerationMethods': ['embedContent'],
     },
     {
-      'name': 'models/gemini-2.0-flash-lite',
+      'name': 'models/gemini-2.5-flash-image',
       'supportedGenerationMethods': ['generateContent'],
     },
     {
-      'name': 'models/gemini-3.0-flash',
+      'name': 'models/gemini-3.8-flash',
       'supportedGenerationMethods': ['generateContent'],
     },
     {
-      'name': 'models/gemini-2.5-flash',
+      'name': 'models/gemini-3.5-flash-lite',
       'supportedGenerationMethods': ['generateContent'],
     },
-  ], exclus: const {'gemini-2.5-flash'});
+    {
+      'name': 'models/gemini-3.1-flash-lite',
+      'supportedGenerationMethods': ['generateContent'],
+    },
+  ], exclus: const {'gemini-3.1-flash-lite'});
   assert(
     classes.length == 2 &&
-        classes.first == 'gemini-3.0-flash' &&
-        classes.last == 'gemini-2.0-flash-lite',
+        classes.first == 'gemini-3.5-flash-lite' &&
+        classes.last == 'gemini-3.8-flash',
   );
 
   reinitialiserModeleGeminiCache();
   final cheminsAppeles = <String>[];
   final clientRepli404 = MockClient((req) async {
     cheminsAppeles.add('${req.method} ${req.url.path}');
-    if (req.method == 'POST' && req.url.path.contains('gemini-2.5-flash')) {
+    if (req.method == 'POST' && req.url.path.contains(kModeleGeminiLecon)) {
+      final body = jsonDecode(req.body) as Map<String, dynamic>;
+      final genCfg = body['generationConfig'] as Map<String, dynamic>;
+      assert(!genCfg.containsKey('thinkingConfig'));
       return http.Response('{"error":{"code":404}}', 404);
     }
     if (req.method == 'GET' && req.url.path == '/v1beta/models') {
@@ -343,7 +351,7 @@ Future<void> main() async {
               'supportedGenerationMethods': ['generateContent'],
             },
             {
-              'name': 'models/gemini-3.0-flash',
+              'name': 'models/gemini-3.1-flash-lite',
               'supportedGenerationMethods': ['generateContent'],
             },
           ],
@@ -351,7 +359,7 @@ Future<void> main() async {
         200,
       );
     }
-    if (req.method == 'POST' && req.url.path.contains('gemini-3.0-flash')) {
+    if (req.method == 'POST' && req.url.path.contains('gemini-3.1-flash-lite')) {
       return http.Response(
         jsonEncode({
           'candidates': [
@@ -379,63 +387,72 @@ Future<void> main() async {
   assert(r404.lecon.titre == 'Le pluriel des noms en -ou');
   assert(cheminsAppeles.length == 3);
   assert(cheminsAppeles[1] == 'GET /v1beta/models');
-  assert(cheminsAppeles[2].contains('gemini-3.0-flash'));
+  assert(cheminsAppeles[2].contains('gemini-3.1-flash-lite'));
 
-  // Le cache garde maintenant gemini-3.0-flash : plus aucun 404 au tour suivant.
+  // Le cache garde maintenant gemini-3.1-flash-lite : plus aucun 404 au tour suivant.
   await genererLeconDepuisPhotos(
     apiKey: 'AIzaCleTest',
     photos: [photo],
     client: clientRepli404,
   );
-  assert(cheminsAppeles.length == 4 && cheminsAppeles[3].contains('gemini-3.0-flash'));
+  assert(
+    cheminsAppeles.length == 4 &&
+        cheminsAppeles[3].contains('gemini-3.1-flash-lite'),
+  );
   reinitialiserModeleGeminiCache();
 
-  // 5e. Modèles *-image exclus + thinkingConfig: 0 envoyé + repli sans thinkingConfig sur 400.
-  assert(
-    !classerModelesGeminiDisponibles([
-      {
-        'name': 'models/gemini-2.5-flash-image',
-        'supportedGenerationMethods': ['generateContent'],
-      },
-      {
-        'name': 'models/gemini-2.5-flash',
-        'supportedGenerationMethods': ['generateContent'],
-      },
-    ]).contains('gemini-2.5-flash-image'),
-  );
-
-  var appelsThinking = 0;
-  final clientRepliThinking = MockClient((req) async {
-    appelsThinking++;
-    final body = jsonDecode(req.body) as Map<String, dynamic>;
-    final genCfg = body['generationConfig'] as Map<String, dynamic>;
-    if (appelsThinking == 1) {
-      assert((genCfg['thinkingConfig'] as Map)['thinkingBudget'] == 0);
-      return http.Response('{"error":{"status":"INVALID_ARGUMENT"}}', 400);
-    }
-    assert(!genCfg.containsKey('thinkingConfig'));
-    return http.Response(
-      jsonEncode({
-        'candidates': [
-          {
-            'content': {
-              'parts': [
-                {'text': _jsonExemple()},
-              ],
-            },
-          },
-        ],
-      }),
-      200,
-      headers: {'content-type': 'application/json; charset=utf-8'},
+  // 5e. Repli automatique sur 429 et sur timeout vers un autre modèle disponible.
+  for (final simulerTimeout in [false, true]) {
+    reinitialiserModeleGeminiCache();
+    final clientRepliPerf = MockClient((req) async {
+      if (req.method == 'POST' && req.url.path.contains(kModeleGeminiLecon)) {
+        if (simulerTimeout) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+        return http.Response('{}', 429);
+      }
+      if (req.method == 'GET' && req.url.path == '/v1beta/models') {
+        return http.Response(
+          jsonEncode({
+            'models': [
+              {
+                'name': 'models/gemini-3.1-flash-lite',
+                'supportedGenerationMethods': ['generateContent'],
+              },
+            ],
+          }),
+          200,
+        );
+      }
+      if (req.method == 'POST' &&
+          req.url.path.contains('gemini-3.1-flash-lite')) {
+        return http.Response(
+          jsonEncode({
+            'candidates': [
+              {
+                'content': {
+                  'parts': [
+                    {'text': _jsonExemple()},
+                  ],
+                },
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response('{}', 500);
+    });
+    final rRepli = await genererLeconDepuisPhotos(
+      apiKey: 'AIzaCleTest',
+      photos: [photo],
+      client: clientRepliPerf,
+      timeout: const Duration(milliseconds: 50),
     );
-  });
-  final rThinking = await genererLeconDepuisPhotos(
-    apiKey: 'AIzaCleTest',
-    photos: [photo],
-    client: clientRepliThinking,
-  );
-  assert(appelsThinking == 2 && rThinking.lecon.titre == 'Le pluriel des noms en -ou');
+    assert(rRepli.lecon.titre == 'Le pluriel des noms en -ou');
+  }
+  reinitialiserModeleGeminiCache();
 
   stdout.writeln('OK: toutes les assertions des lots 1 et 2 ont reussi.');
 }

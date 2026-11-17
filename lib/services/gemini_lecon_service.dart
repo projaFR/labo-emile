@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../logic/lecon_json_logic.dart';
 
 /// Modèle Gemini gratuit et rapide adapté à la lecture de photos de cahiers.
-const String kModeleGeminiLecon = 'gemini-2.5-flash';
+const String kModeleGeminiLecon = 'gemini-3.5-flash-lite';
 
 String _modeleGeminiActif = kModeleGeminiLecon;
 
@@ -16,8 +16,9 @@ void reinitialiserModeleGeminiCache() {
   _modeleGeminiActif = kModeleGeminiLecon;
 }
 
-class _ModeleGeminiIntrouvableException implements Exception {
-  const _ModeleGeminiIntrouvableException();
+class _ModeleGeminiIndisponibleException implements Exception {
+  final ErreurGeminiLecon erreurDirecte;
+  const _ModeleGeminiIndisponibleException(this.erreurDirecte);
 }
 
 const List<String> _motsExclusModeleGemini = [
@@ -62,8 +63,10 @@ List<String> classerModelesGeminiDisponibles(
 
     var score = 0;
     if (id.contains('flash')) score += 1000;
-    if (!id.contains('lite') && !id.contains('8b')) score += 200;
-    if (id == 'gemini-flash-latest') score += 150;
+    if (id.contains('flash-lite')) score += 300;
+    if (id == 'gemini-flash-lite-latest' || id == 'gemini-flash-latest') {
+      score += 150;
+    }
     if (!id.contains('preview') && !id.contains('exp')) score += 50;
     final m = regVersion.firstMatch(id);
     if (m != null) {
@@ -263,25 +266,35 @@ Future<LeconImportee> genererLeconDepuisPhotos({
 
 void _verifierStatutHttpGemini(
   int statusCode, {
-  bool lever404CommeIntrouvable = false,
+  bool autoriserRepli = false,
 }) {
-  if (lever404CommeIntrouvable && statusCode == 404) {
-    throw const _ModeleGeminiIntrouvableException();
-  }
   if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
     throw const ErreurGeminiLecon(
       'Clé Gemini refusée. Vérifie ta clé dans l’Espace Parent.',
     );
   }
+  if (statusCode == 404) {
+    const err = ErreurGeminiLecon(
+      'Aucun modèle Gemini compatible trouvé pour cette clé (erreur 404).',
+    );
+    if (autoriserRepli) throw const _ModeleGeminiIndisponibleException(err);
+    throw err;
+  }
   if (statusCode == 429) {
-    throw const ErreurGeminiLecon(
+    const err = ErreurGeminiLecon(
       'Limite gratuite Gemini atteinte pour l’instant. Réessaie dans une minute.',
     );
+    if (autoriserRepli) throw const _ModeleGeminiIndisponibleException(err);
+    throw err;
   }
   if (statusCode < 200 || statusCode >= 300) {
-    throw ErreurGeminiLecon(
+    final err = ErreurGeminiLecon(
       'Gemini a renvoyé une erreur (code $statusCode). Réessaie.',
     );
+    if (autoriserRepli && statusCode >= 500) {
+      throw _ModeleGeminiIndisponibleException(err);
+    }
+    throw err;
   }
 }
 
@@ -291,6 +304,8 @@ Future<String> _appelerAvecRepliModele({
   required List<Map<String, dynamic>> contents,
   required Duration timeout,
 }) async {
+  final timeoutParEssai =
+      timeout.inSeconds > 25 ? const Duration(seconds: 25) : timeout;
   final initial = _modeleGeminiActif;
   try {
     return await _appelerGemini(
@@ -298,15 +313,17 @@ Future<String> _appelerAvecRepliModele({
       modele: initial,
       apiKey: apiKey,
       contents: contents,
-      timeout: timeout,
+      timeout: timeoutParEssai,
+      autoriserRepli: true,
     );
-  } on _ModeleGeminiIntrouvableException {
+  } on _ModeleGeminiIndisponibleException catch (premierEchec) {
     final candidats = await listerModelesGeminiCompatibles(
       client: client,
       apiKey: apiKey,
-      timeout: timeout,
+      timeout: timeoutParEssai,
       exclus: {initial},
     );
+    var derniereErreur = premierEchec.erreurDirecte;
     for (final candidat in candidats.take(3)) {
       try {
         final reponse = await _appelerGemini(
@@ -314,17 +331,17 @@ Future<String> _appelerAvecRepliModele({
           modele: candidat,
           apiKey: apiKey,
           contents: contents,
-          timeout: timeout,
+          timeout: timeoutParEssai,
+          autoriserRepli: true,
         );
         _modeleGeminiActif = candidat;
         return reponse;
-      } on _ModeleGeminiIntrouvableException {
+      } on _ModeleGeminiIndisponibleException catch (e) {
+        derniereErreur = e.erreurDirecte;
         continue;
       }
     }
-    throw const ErreurGeminiLecon(
-      'Aucun modèle Gemini compatible trouvé pour cette clé (erreur 404).',
-    );
+    throw derniereErreur;
   }
 }
 
@@ -334,7 +351,7 @@ Future<String> _appelerGemini({
   required String apiKey,
   required List<Map<String, dynamic>> contents,
   required Duration timeout,
-  bool desactiverThinking = true,
+  bool autoriserRepli = false,
 }) async {
   final uri = Uri.https(
     'generativelanguage.googleapis.com',
@@ -350,7 +367,6 @@ Future<String> _appelerGemini({
     'generationConfig': {
       'responseMimeType': 'application/json',
       'temperature': 0.3,
-      if (desactiverThinking) 'thinkingConfig': {'thinkingBudget': 0},
     },
   });
 
@@ -367,29 +383,18 @@ Future<String> _appelerGemini({
         )
         .timeout(timeout);
   } on TimeoutException {
-    throw const ErreurGeminiLecon(
+    const err = ErreurGeminiLecon(
       'Gemini a mis trop de temps à répondre. Réessaie dans un instant.',
     );
+    if (autoriserRepli) throw const _ModeleGeminiIndisponibleException(err);
+    throw err;
   } catch (_) {
     throw const ErreurGeminiLecon(
       'Impossible de joindre Gemini. Vérifie la connexion internet.',
     );
   }
 
-  if (res.statusCode == 400 &&
-      desactiverThinking &&
-      !res.body.toUpperCase().contains('API_KEY_INVALID')) {
-    return _appelerGemini(
-      client: client,
-      modele: modele,
-      apiKey: apiKey,
-      contents: contents,
-      timeout: timeout,
-      desactiverThinking: false,
-    );
-  }
-
-  _verifierStatutHttpGemini(res.statusCode, lever404CommeIntrouvable: true);
+  _verifierStatutHttpGemini(res.statusCode, autoriserRepli: autoriserRepli);
 
   try {
     final json = jsonDecode(res.body) as Map<String, dynamic>;
