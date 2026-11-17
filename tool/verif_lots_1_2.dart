@@ -302,5 +302,93 @@ Future<void> main() async {
   }
   assert(erreurQuota.contains('Limite gratuite Gemini atteinte'));
 
+  // 5d. Découverte automatique de modèle Gemini sur erreur 404.
+  final classes = classerModelesGeminiDisponibles([
+    {
+      'name': 'models/text-embedding-004',
+      'supportedGenerationMethods': ['embedContent'],
+    },
+    {
+      'name': 'models/gemini-2.0-flash-lite',
+      'supportedGenerationMethods': ['generateContent'],
+    },
+    {
+      'name': 'models/gemini-3.0-flash',
+      'supportedGenerationMethods': ['generateContent'],
+    },
+    {
+      'name': 'models/gemini-2.5-flash',
+      'supportedGenerationMethods': ['generateContent'],
+    },
+  ], exclus: const {'gemini-2.5-flash'});
+  assert(
+    classes.length == 2 &&
+        classes.first == 'gemini-3.0-flash' &&
+        classes.last == 'gemini-2.0-flash-lite',
+  );
+
+  reinitialiserModeleGeminiCache();
+  final cheminsAppeles = <String>[];
+  final clientRepli404 = MockClient((req) async {
+    cheminsAppeles.add('${req.method} ${req.url.path}');
+    if (req.method == 'POST' && req.url.path.contains('gemini-2.5-flash')) {
+      return http.Response('{"error":{"code":404}}', 404);
+    }
+    if (req.method == 'GET' && req.url.path == '/v1beta/models') {
+      return http.Response(
+        jsonEncode({
+          'models': [
+            {
+              'name': 'models/text-embedding-004',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+            {
+              'name': 'models/gemini-3.0-flash',
+              'supportedGenerationMethods': ['generateContent'],
+            },
+          ],
+        }),
+        200,
+      );
+    }
+    if (req.method == 'POST' && req.url.path.contains('gemini-3.0-flash')) {
+      return http.Response(
+        jsonEncode({
+          'candidates': [
+            {
+              'content': {
+                'parts': [
+                  {'text': _jsonExemple()},
+                ],
+              },
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    }
+    return http.Response('{}', 500);
+  });
+
+  final r404 = await genererLeconDepuisPhotos(
+    apiKey: 'AIzaCleTest',
+    photos: [photo],
+    client: clientRepli404,
+  );
+  assert(r404.lecon.titre == 'Le pluriel des noms en -ou');
+  assert(cheminsAppeles.length == 3);
+  assert(cheminsAppeles[1] == 'GET /v1beta/models');
+  assert(cheminsAppeles[2].contains('gemini-3.0-flash'));
+
+  // Le cache garde maintenant gemini-3.0-flash : plus aucun 404 au tour suivant.
+  await genererLeconDepuisPhotos(
+    apiKey: 'AIzaCleTest',
+    photos: [photo],
+    client: clientRepli404,
+  );
+  assert(cheminsAppeles.length == 4 && cheminsAppeles[3].contains('gemini-3.0-flash'));
+  reinitialiserModeleGeminiCache();
+
   stdout.writeln('OK: toutes les assertions des lots 1 et 2 ont reussi.');
 }
