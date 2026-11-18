@@ -5,7 +5,10 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:myapp/logic/accueil_logic.dart';
+import 'package:myapp/logic/lecon_json_logic.dart';
 import 'package:myapp/logic/memoire.dart';
+import 'package:myapp/logic/suivi_parent_logic.dart';
 import 'package:myapp/logic/sync_logic.dart';
 import 'package:myapp/models/lesson_model.dart';
 import 'package:myapp/services/labo_firebase_auth.dart';
@@ -320,6 +323,73 @@ Future<void> main() async {
   );
   assert(cfgG.email == 'thibaut@gmail.com');
   assert(ConfigFirebaseLabo.tryParse(savedGoogle)?.desktopClientId == 'cid-1');
+
+  // 7. Suivi parent détaillé & questions masquées.
+  final lSuivi = _lecon('Fractions');
+  final qSuivi = questionsDeLecon(lSuivi).first;
+  final mSuivi = Memoire()..enregistrer(qSuivi.cle, Resultat.rate);
+  final refsSuivi = [LeconRef('Maths', lSuivi)];
+  assert(calculerResumesLecons(refsSuivi, mSuivi).first.totalQuestions == 1);
+  assert(topQuestionsRatees(refsSuivi, mSuivi).first.ratees == 1);
+  assert(
+    topQuestionsRatees(refsSuivi, mSuivi, masquees: {qSuivi.cle}).isEmpty,
+  );
+  assert(listerQuestionsMasquees(refsSuivi, mSuivi, {qSuivi.cle}).length == 1);
+
+  final progMasq = ProgressionSync(
+    diamants: 1,
+    diamantsModifieLe: '2026-11-18T10:00:00Z',
+    etoiles: const {},
+    cartesDiamant: const {},
+    seanceVus: const {},
+    memoireJson: Memoire().toJsonString(),
+    questionsMasquees: [qSuivi.cle],
+  );
+  assert(
+    ProgressionSync.tryFromJsonString(progMasq.toJsonString())!
+            .questionsMasquees
+            .single ==
+        qSuivi.cle,
+  );
+
+  // 8. Lot D : saisieMot, reponsesAcceptees, explication & rejet type inconnu.
+  final leconLotD = analyserJsonLecon(jsonEncode({
+    'matiere': 'Français',
+    'titre': 'Pluriel -ou',
+    'astuces': [],
+    'exercices': [
+      {
+        'type': 'saisieMot',
+        'question': 'Des [?] (hibou)',
+        'consigne': 'Écris au pluriel :',
+        'reponseAttendue': 'hiboux',
+        'reponsesAcceptees': ['des hiboux'],
+        'astuceErreur': 'Pense aux 7 exceptions.',
+        'explication': 'Hibou prend un -x au pluriel.',
+      },
+    ],
+    'quiz': [],
+  }));
+  final exD = leconLotD.lecon.exercices.single;
+  assert(exD.estSaisieMot && exD.reponsesAcceptees.single == 'des hiboux');
+  assert(exD.explication == 'Hibou prend un -x au pluriel.');
+
+  var typeInconnuRefuse = false;
+  try {
+    analyserJsonLecon(jsonEncode({
+      'titre': 'Futur',
+      'exercices': [
+        {
+          'type': 'typeFuturInconnu',
+          'question': 'Q ?',
+          'astuceErreur': 'A',
+        },
+      ],
+    }));
+  } on FormatException catch (e) {
+    typeInconnuRefuse = e.message.contains('Mets l\'appli à jour');
+  }
+  assert(typeInconnuRefuse);
 
   stdout.writeln('OK: toutes les assertions des lots 3 et 4 ont reussi.');
 }

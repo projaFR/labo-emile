@@ -12,6 +12,7 @@ import '../logic/trophees_logic.dart';
 import '../models/lesson_model.dart';
 import '../services/labo_sync_service.dart';
 import '../services/memoire_service.dart';
+import '../services/questions_masquees_service.dart';
 import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 import '../theme.dart';
@@ -76,6 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadProgress();
     MemoireService().addListener(_surMemoire);
     MemoireService().charger();
+    QuestionsMasqueesService().addListener(_surMasquees);
+    QuestionsMasqueesService().charger();
     LaboSyncService().addListener(_surSync);
     unawaited(_demarrerSync());
   }
@@ -102,10 +105,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
+  void _surMasquees() {
+    _cacheQuestions = null;
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     LaboSyncService().removeListener(_surSync);
     MemoireService().removeListener(_surMemoire);
+    QuestionsMasqueesService().removeListener(_surMasquees);
     _confettiController.dispose();
     _diamantsNotif.dispose();
     SoundService().dispose();
@@ -120,7 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<RefQuestion>? _cacheQuestions;
   List<RefQuestion> get _toutesQuestions => _cacheQuestions ??= [
     for (final lessons in _database.values)
-      for (final l in lessons) ...questionsDeLecon(l),
+      for (final l in lessons)
+        for (final q in questionsDeLecon(l))
+          if (!QuestionsMasqueesService().estMasquee(q.cle)) q,
   ];
 
   Memoire get _memoire => MemoireService().memoire;
@@ -585,6 +596,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       builder: (context) => ParentView(
         currentDiamonds: _totalDiamonds,
+        lecons: _toutes,
+        memoire: _memoire,
         infoMemoire: () {
           final refs = _toutesQuestions;
           return "${_memoire.nombreSuiviesParmi(refs)} questions suivies, "

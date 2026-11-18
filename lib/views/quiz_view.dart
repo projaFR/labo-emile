@@ -7,6 +7,7 @@ import '../logic/seance_logic.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
 import '../services/memoire_service.dart';
+import '../services/questions_masquees_service.dart';
 import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 
@@ -67,8 +68,18 @@ class _QuizViewState extends State<QuizView> {
   }
 
   void _shuffleQuiz() {
-    // Mélange les questions
-    final shuffled = List<QuizModel>.from(widget.lesson.quiz)..shuffle(Random());
+    // Mélange les questions (en excluant celles masquées par le parent)
+    final source = widget.surFin != null
+        ? widget.lesson.quiz
+        : widget.lesson.quiz.where((q) {
+            final cle = cleQuestion(
+              widget.lesson.titre,
+              TypeQuestion.quiz,
+              q.question,
+            );
+            return !QuestionsMasqueesService().estMasquee(cle);
+          }).toList();
+    final shuffled = List<QuizModel>.from(source)..shuffle(Random());
     // Pour chaque question, mélange aussi les options en gardant indexCorrect sync
     _shuffledQuiz = shuffled.map((q) {
       final List<MapEntry<int, String>> indexed = q.options

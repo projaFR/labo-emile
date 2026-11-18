@@ -8,7 +8,9 @@ import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
 import '../services/labo_sync_service.dart';
 import '../services/memoire_service.dart';
+import '../services/questions_masquees_service.dart';
 import '../services/sound_service.dart';
+import 'pin_gate.dart';
 
 class ExerciseView extends StatefulWidget {
   final LessonModel lesson;
@@ -127,8 +129,16 @@ class _ExerciseViewState extends State<ExerciseView> {
     } catch (_) {}
     if (!mounted || lesson != widget.lesson) return;
     final tirage = tirerSeance(lesson.exercices.length, vus);
+    final indicesFiltres = tirage.indices.where((i) {
+      final cle = cleQuestion(
+        lesson.titre,
+        TypeQuestion.exercice,
+        lesson.exercices[i].question,
+      );
+      return !QuestionsMasqueesService().estMasquee(cle);
+    }).toList();
     setState(() {
-      _sessionIndices = tirage.indices;
+      _sessionIndices = indicesFiltres;
       _vus = tirage.vusApres;
       _currentIndex = 0;
       _failedFinal = 0;
@@ -214,6 +224,9 @@ class _ExerciseViewState extends State<ExerciseView> {
           break;
         }
       }
+    } else if (currentEx.estSaisieMot) {
+      allGood = _controllers.isNotEmpty &&
+          _estReponseMotValide(_controllers[0].text, currentEx);
     } else {
       allGood =
           _controllers.isNotEmpty &&
@@ -221,6 +234,16 @@ class _ExerciseViewState extends State<ExerciseView> {
     }
 
     _appliquerResultat(allGood);
+  }
+
+  String _normaliserTexte(String s) =>
+      s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  bool _estReponseMotValide(String saisie, ExerciseModel ex) {
+    final norm = _normaliserTexte(saisie);
+    if (norm.isEmpty) return false;
+    if (norm == _normaliserTexte(ex.reponseAttendue)) return true;
+    return ex.reponsesAcceptees.any((alt) => _normaliserTexte(alt) == norm);
   }
 
   // ── Sélection d'une case QCM ───────────────────────────────────────────────
@@ -479,17 +502,21 @@ class _ExerciseViewState extends State<ExerciseView> {
             ),
           );
         } else {
+          final estMot = currentEx.estSaisieMot;
           widgets.add(
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6.0),
               child: SizedBox(
-                width: 72,
+                width: estMot ? 180 : 72,
                 height: 46,
                 child: TextField(
                   controller: _controllers[i],
                   focusNode: _focusNodes[i],
                   enabled: !_isSubmitted,
-                  keyboardType: TextInputType.number,
+                  keyboardType:
+                      estMot ? TextInputType.text : TextInputType.number,
+                  autocorrect: false,
+                  enableSuggestions: false,
                   textInputAction: i < _controllers.length - 1
                       ? TextInputAction.next
                       : TextInputAction.done,
@@ -552,6 +579,31 @@ class _ExerciseViewState extends State<ExerciseView> {
       style: TextStyle(color: fg, fontWeight: FontWeight.bold),
     ),
   );
+
+  Future<void> _signalerQuestion() async {
+    final ok = await demanderCodeParent(context);
+    if (!ok || !mounted) return;
+    final ex = _currentExercise;
+    final cle = cleQuestion(
+      widget.lesson.titre,
+      TypeQuestion.exercice,
+      ex.question,
+    );
+    await QuestionsMasqueesService().masquer(cle);
+    if (!mounted) return;
+    setState(() {
+      _sessionIndices.removeAt(_currentIndex);
+      if (_currentIndex < _sessionIndices.length) {
+        _initCurrentExercise();
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Question masquée (réaffichable dans Espace Parent).'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
@@ -653,14 +705,38 @@ class _ExerciseViewState extends State<ExerciseView> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                          Text(
-                            currentEx.consigne,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: consoleFontSize,
-                              color: LaboPalette.encre,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              const SizedBox(width: 28),
+                              Expanded(
+                                child: Text(
+                                  currentEx.consigne,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: consoleFontSize,
+                                    color: LaboPalette.encre,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (widget.surFin == null)
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 28,
+                                    minHeight: 28,
+                                  ),
+                                  tooltip: 'Signaler / masquer (parent)',
+                                  icon: const Icon(
+                                    Icons.flag_outlined,
+                                    size: 16,
+                                    color: LaboPalette.muted,
+                                  ),
+                                  onPressed: _signalerQuestion,
+                                )
+                              else
+                                const SizedBox(width: 28),
+                            ],
                           ),
                           SizedBox(height: gap1),
                           _buildQuestionWithSlots(currentEx),
@@ -747,16 +823,15 @@ class _ExerciseViewState extends State<ExerciseView> {
                             ),
                           if (_isSubmitted && _isCorrect)
                             _infoBox(
-                              _attempt == 2
-                                  ? 'Bravo, tu as trouvé ! 🎉'
-                                  : 'Bravo ! 🎉',
+                              '${_attempt == 2 ? 'Bravo, tu as trouvé ! 🎉' : 'Bravo ! 🎉'}'
+                              '${(currentEx.explication ?? '').isEmpty ? '' : '\n${currentEx.explication}'}',
                               Colors.green.shade50,
                               Colors.green.shade900,
                             ),
                           if (_isSubmitted && !_isCorrect)
                             _infoBox(
                               'La bonne réponse : ${texteBonneReponse(currentEx)}'
-                              '${currentEx.astuceErreur.trim().isEmpty ? "" : "\n💡 ${currentEx.astuceErreur}"}',
+                              '${(currentEx.explication ?? currentEx.astuceErreur).trim().isEmpty ? "" : "\n💡 ${(currentEx.explication ?? currentEx.astuceErreur).trim()}"}',
                               Colors.amber.shade50,
                               Colors.brown.shade800,
                             ),

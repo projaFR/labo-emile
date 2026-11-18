@@ -7,6 +7,7 @@ import '../models/lesson_model.dart';
 import '../services/choisir_photo.dart';
 import '../services/gemini_key_store.dart';
 import '../services/gemini_lecon_service.dart';
+import '../services/gemini_quota_store.dart';
 import '../services/ouvrir_lien.dart';
 import '../theme.dart';
 import '../widgets/badge_rond.dart';
@@ -30,6 +31,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
   final List<PhotoLecon> _photos = [];
   String? _cleGemini;
   bool _cleChargee = false;
+  UtilisationGeminiJour? _utilisationGemini;
   bool _enCours = false;
   String? _erreurPhoto;
   String? _errorMessage;
@@ -43,9 +45,11 @@ class _ImportLeconViewState extends State<ImportLeconView> {
 
   Future<void> _chargerCle() async {
     final cle = await lireCleGemini();
+    final util = await GeminiQuotaStore.charger();
     if (!mounted) return;
     setState(() {
       _cleGemini = cle;
+      _utilisationGemini = util;
       _cleChargee = true;
     });
   }
@@ -118,17 +122,41 @@ class _ImportLeconViewState extends State<ImportLeconView> {
       _erreurPhoto = null;
       _apercu = null;
     });
+    var jetonsRecus = 0;
+    var appelsRecus = 0;
     try {
       final lecon = await genererLeconDepuisPhotos(
         apiKey: cle,
         photos: List.of(_photos),
         commentaireParent: _precisionController.text,
+        surUtilisation: (jetons) {
+          appelsRecus++;
+          jetonsRecus += jetons;
+        },
+      );
+      final util = await GeminiQuotaStore.enregistrer(
+        appelsAjoutes: appelsRecus > 0 ? appelsRecus : 1,
+        leconsAjoutees: 1,
+        jetonsAjoutes: jetonsRecus,
       );
       if (!mounted) return;
-      setState(() => _apercu = lecon);
+      setState(() {
+        _apercu = lecon;
+        _utilisationGemini = util;
+      });
     } on ErreurGeminiLecon catch (e) {
+      final estLimite =
+          e.message.contains('Limite gratuite') || e.message.contains('429');
+      final util = await GeminiQuotaStore.enregistrer(
+        appelsAjoutes: appelsRecus > 0 ? appelsRecus : 1,
+        jetonsAjoutes: jetonsRecus,
+        limiteAtteinte: estLimite,
+      );
       if (!mounted) return;
-      setState(() => _erreurPhoto = e.message);
+      setState(() {
+        _erreurPhoto = e.message;
+        _utilisationGemini = util;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(
@@ -352,6 +380,10 @@ class _ImportLeconViewState extends State<ImportLeconView> {
             ),
           ),
         ),
+        if (_utilisationGemini != null) ...[
+          const SizedBox(height: 10),
+          _buildJaugeGemini(_utilisationGemini!),
+        ],
         if (_enCours) ...[
           const SizedBox(height: 12),
           const Row(
@@ -390,6 +422,61 @@ class _ImportLeconViewState extends State<ImportLeconView> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildJaugeGemini(UtilisationGeminiJour util) {
+    final ratio = util.ratioRestant;
+    final couleur = util.limiteAtteinte || ratio <= 0.15
+        ? LaboPalette.rouge
+        : (ratio <= 0.4 ? LaboPalette.warn : LaboPalette.good);
+    final jetonsK = util.jetons >= 1000
+        ? ' · ~${(util.jetons / 1000).toStringAsFixed(1)} k jetons'
+        : '';
+    final texte = util.limiteAtteinte
+        ? 'Quota gratuit Gemini atteint aujourd’hui (réessaie demain)'
+        : 'Quota du jour (estimation) : '
+            '~${util.restantIndicatif} / ${UtilisationGeminiJour.kQuotaIndicatifJour} '
+            'restants (${util.lecons} leçon${util.lecons > 1 ? 's' : ''}$jetonsK)';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: couleur.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: couleur.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.speed, size: 15, color: couleur),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  texte,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: couleur,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 6,
+              backgroundColor: LaboPalette.paper,
+              valueColor: AlwaysStoppedAnimation<Color>(couleur),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

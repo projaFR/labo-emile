@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../logic/accueil_logic.dart';
+import '../logic/memoire.dart';
 import '../logic/sauvegarde.dart';
+import '../logic/suivi_parent_logic.dart';
 import '../version.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gemini_key_store.dart';
 import '../services/labo_sync_service.dart';
+import '../services/questions_masquees_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/dialogue_cle_gemini.dart';
 import '../widgets/dialogue_sync_firebase.dart';
@@ -27,6 +31,9 @@ class ParentView extends StatefulWidget {
   /// Appelée après une restauration réussie : recharge tout l'état.
   final Future<void> Function() onRestauree;
 
+  final List<LeconRef> lecons;
+  final Memoire? memoire;
+
   const ParentView({
     super.key,
     required this.currentDiamonds,
@@ -37,6 +44,8 @@ class ParentView extends StatefulWidget {
     required this.infoMemoire,
     required this.onResetMemoire,
     required this.onRestauree,
+    this.lecons = const [],
+    this.memoire,
   });
 
   @override
@@ -58,6 +67,198 @@ class _ParentViewState extends State<ParentView> {
   Future<void> _chargerCleGemini() async {
     final cle = await lireCleGemini();
     if (mounted) setState(() => _cleGemini = cle);
+  }
+
+  Future<void> _ouvrirSuiviDetaille() async {
+    final mem = widget.memoire;
+    if (mem == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          final masquees = QuestionsMasqueesService().masquees;
+          final resumes = calculerResumesLecons(
+            widget.lecons,
+            mem,
+            masquees: masquees,
+          );
+          final topRatees = topQuestionsRatees(
+            widget.lecons,
+            mem,
+            masquees: masquees,
+          );
+          final listeMasquees = listerQuestionsMasquees(
+            widget.lecons,
+            mem,
+            masquees,
+          );
+
+          return AlertDialog(
+            title: const Text("📊 Suivi détaillé d'Émile"),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Maîtrise par leçon",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: LaboPalette.encre,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (resumes.isEmpty)
+                      const Text(
+                        "Aucune leçon pour l'instant.",
+                        style: TextStyle(color: LaboPalette.muted, fontSize: 13),
+                      )
+                    else
+                      for (final r in resumes)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r.titre,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    "${r.maitrisees}/${r.totalQuestions} (${r.pourcentageMaitrise}%)",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: LaboPalette.muted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: r.totalQuestions == 0
+                                      ? 0
+                                      : r.maitrisees / r.totalQuestions,
+                                  minHeight: 6,
+                                  backgroundColor: LaboPalette.paper,
+                                  valueColor: const AlwaysStoppedAnimation<Color>(
+                                    LaboPalette.good,
+                                  ),
+                                ),
+                              ),
+                              if (r.aRevoir > 0)
+                                Text(
+                                  "${r.aRevoir} à revoir aujourd'hui",
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: LaboPalette.warn,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                    const Divider(height: 20),
+                    const Text(
+                      "Questions les plus ratées",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: LaboPalette.encre,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (topRatees.isEmpty)
+                      const Text(
+                        "Aucune erreur enregistrée pour l'instant.",
+                        style: TextStyle(color: LaboPalette.muted, fontSize: 13),
+                      )
+                    else
+                      for (final q in topRatees)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            q.texteQuestion,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          subtitle: Text(
+                            "${q.titreLecon} · ${q.ratees} erreur${q.ratees > 1 ? 's' : ''}",
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: LaboPalette.rouge,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            tooltip: "Masquer cette question (erreur IA)",
+                            icon: const Icon(
+                              Icons.flag_outlined,
+                              size: 18,
+                              color: LaboPalette.muted,
+                            ),
+                            onPressed: () async {
+                              await QuestionsMasqueesService().masquer(q.cle);
+                              setDlgState(() {});
+                            },
+                          ),
+                        ),
+                    if (listeMasquees.isNotEmpty) ...[
+                      const Divider(height: 20),
+                      const Text(
+                        "Questions masquées",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: LaboPalette.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      for (final q in listeMasquees)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            q.texteQuestion,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          subtitle: Text(
+                            q.titreLecon,
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          trailing: TextButton(
+                            onPressed: () async {
+                              await QuestionsMasqueesService().demasquer(q.cle);
+                              setDlgState(() {});
+                            },
+                            child: const Text("Réafficher"),
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("FERMER"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _configurerCleGemini() async {
@@ -374,6 +575,21 @@ class _ParentViewState extends State<ParentView> {
             const SizedBox(height: 6),
             Text(widget.infoMemoire(), style: const TextStyle(fontSize: 14)),
             const SizedBox(height: 8),
+            if (widget.memoire != null) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _ouvrirSuiviDetaille,
+                  icon: const Icon(Icons.bar_chart),
+                  label: const Text("📊 Suivi détaillé d'Émile"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LaboPalette.encre,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

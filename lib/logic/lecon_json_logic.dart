@@ -1,6 +1,14 @@
 import 'dart:convert';
 import '../models/lesson_model.dart';
 
+/// Types d'exercices reconnus par cette version de l'application.
+const Set<String> kTypesExercicesConnus = {
+  'numericBlanks',
+  'textQcm',
+  'singleInput',
+  'saisieMot',
+};
+
 /// Résultat d'une analyse JSON de leçon (matière + modèle validé).
 class LeconImportee {
   final String matiere;
@@ -147,6 +155,34 @@ LeconImportee analyserJsonLecon(String rawText) {
     final rawAstuce = item['astuceErreur'];
     final astuceErreur = rawAstuce is String ? rawAstuce : '';
 
+    final rawType = item['type'];
+    String? typeExplicite;
+    if (rawType != null) {
+      if (rawType is! String || !kTypesExercicesConnus.contains(rawType.trim())) {
+        throw FormatException(
+          "❌ Exercice n°${i + 1} : type '$rawType' inconnu. "
+          "Mets l'appli à jour pour utiliser ce nouveau type d'exercice.",
+        );
+      }
+      typeExplicite = rawType.trim();
+    }
+
+    final rawAcceptees = item['reponsesAcceptees'];
+    if (rawAcceptees != null && rawAcceptees is! List) {
+      throw FormatException(
+        "❌ Exercice n°${i + 1} : 'reponsesAcceptees' doit être une liste.",
+      );
+    }
+    final reponsesAcceptees = rawAcceptees == null
+        ? const <String>[]
+        : [for (final r in rawAcceptees) r.toString()];
+
+    final rawExplication = item['explication'];
+    final explication =
+        (rawExplication is String && rawExplication.trim().isNotEmpty)
+            ? rawExplication.trim()
+            : null;
+
     importedExercises.add(
       ExerciseModel(
         question: question,
@@ -155,6 +191,9 @@ LeconImportee analyserJsonLecon(String rawText) {
         reponsesMultiples: reponsesMultiples,
         astuceErreur: astuceErreur,
         options: optionsList,
+        typeExplicite: typeExplicite,
+        reponsesAcceptees: reponsesAcceptees,
+        explication: explication,
       ),
     );
   }

@@ -13,6 +13,7 @@ import 'labo_firebase_auth.dart';
 import 'labo_firestore_client.dart';
 import 'labo_sync_plateforme.dart';
 import 'memoire_service.dart';
+import 'questions_masquees_service.dart';
 
 enum EtatSyncLabo { nonConfigure, synchronisation, aJour, horsLigne, erreur }
 
@@ -611,6 +612,8 @@ class LaboSyncService extends ChangeNotifier {
       memoireJson: MemoireService().memoire.toJsonString(),
       leconsBaseSupprimees:
           prefs.getStringList('deleted_initial_lessons') ?? const [],
+      questionsMasquees:
+          prefs.getStringList(QuestionsMasqueesService.kCle) ?? const [],
     );
   }
 
@@ -663,6 +666,15 @@ class LaboSyncService extends ChangeNotifier {
         p.leconsBaseSupprimees,
       );
     }
+    if (p.questionsMasquees.isEmpty) {
+      await prefs.remove(QuestionsMasqueesService.kCle);
+    } else {
+      await prefs.setStringList(
+        QuestionsMasqueesService.kCle,
+        p.questionsMasquees,
+      );
+    }
+    await QuestionsMasqueesService().charger(forcer: true);
 
     if (p.diamantsModifieLe.isNotEmpty) {
       meta.diamantsModifieLe = p.diamantsModifieLe;

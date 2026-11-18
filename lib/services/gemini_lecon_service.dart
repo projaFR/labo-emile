@@ -160,12 +160,17 @@ Règles strictes :
          - laisse "options" vide ("options": []),
          - s'il y a 1 seul "[?]", remplis "reponseAttendue" (nombre sans espaces, ex : "1000"),
          - s'il y a 2 "[?]" ou plus, remplis "reponsesMultiples" avec autant d'éléments exacts que de "[?]".
-       * Pour un mot, une règle ou du français (QCM) :
+       * Pour un mot à écrire (orthographe, conjugaison, vocabulaire — à privilégier sur les QCM en orthographe) :
+         - mets "type": "saisieMot", 1 "[?]" dans "question" (ex : "Des [?] (hibou)"),
+         - laisse "options" vide ("options": []),
+         - mets le mot attendu dans "reponseAttendue" (ex : "hiboux"),
+         - ajoute facultativement "reponsesAcceptees": [...] s'il y a plusieurs écritures justes.
+       * Pour une règle ou du français (QCM) :
          - mets 0 ou 1 "[?]" dans "question",
          - fournis exactement 4 "options",
          - mets dans "reponseAttendue" la copie exacte de la bonne option.
          - INTERDIT d'inventer des mots mal orthographiés dans les options (utilise d'autres vrais mots français ou des erreurs de règle plausibles).
-       * Champs de chaque exercice : "question", "consigne", "reponseAttendue", "reponsesMultiples", "options", "astuceErreur".
+       * Champs de chaque exercice : "question", "consigne", "reponseAttendue", "reponsesMultiples", "options", "astuceErreur", et facultativement "type", "reponsesAcceptees", "explication" (courte explication affichée après la réponse).
        * "astuceErreur" : indice court (moins de 15 mots) qui aide à réfléchir sans jamais donner la réponse.
    - "quiz" : liste de 5 questions courtes (lisibles en moins de 5 s) pour le Défi Chrono :
        {"question": "...", "options": ["...", "...", "...", "..."], "indexCorrect": 0} (indexCorrect entre 0 et 3).
@@ -178,6 +183,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
   String commentaireParent = '',
   http.Client? client,
   Duration timeout = const Duration(seconds: 120),
+  void Function(int jetons)? surUtilisation,
 }) async {
   final cle = apiKey.trim();
   if (cle.isEmpty) {
@@ -220,6 +226,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
       apiKey: cle,
       contents: contents,
       timeout: timeout,
+      surUtilisation: surUtilisation,
     );
 
     try {
@@ -250,6 +257,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
         apiKey: cle,
         contents: correctionContents,
         timeout: timeout,
+        surUtilisation: surUtilisation,
       );
       try {
         return analyserJsonLecon(texteCorrige);
@@ -303,6 +311,7 @@ Future<String> _appelerAvecRepliModele({
   required String apiKey,
   required List<Map<String, dynamic>> contents,
   required Duration timeout,
+  void Function(int jetons)? surUtilisation,
 }) async {
   final timeoutParEssai =
       timeout.inSeconds > 25 ? const Duration(seconds: 25) : timeout;
@@ -315,6 +324,7 @@ Future<String> _appelerAvecRepliModele({
       contents: contents,
       timeout: timeoutParEssai,
       autoriserRepli: true,
+      surUtilisation: surUtilisation,
     );
   } on _ModeleGeminiIndisponibleException catch (premierEchec) {
     final candidats = await listerModelesGeminiCompatibles(
@@ -333,6 +343,7 @@ Future<String> _appelerAvecRepliModele({
           contents: contents,
           timeout: timeoutParEssai,
           autoriserRepli: true,
+          surUtilisation: surUtilisation,
         );
         _modeleGeminiActif = candidat;
         return reponse;
@@ -352,6 +363,7 @@ Future<String> _appelerGemini({
   required List<Map<String, dynamic>> contents,
   required Duration timeout,
   bool autoriserRepli = false,
+  void Function(int jetons)? surUtilisation,
 }) async {
   final uri = Uri.https(
     'generativelanguage.googleapis.com',
@@ -398,6 +410,9 @@ Future<String> _appelerGemini({
 
   try {
     final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final usage = json['usageMetadata'];
+    final jetons = usage is Map ? (usage['totalTokenCount'] as int?) ?? 0 : 0;
+    surUtilisation?.call(jetons);
     final candidates = json['candidates'] as List?;
     if (candidates == null || candidates.isEmpty) {
       throw const ErreurGeminiLecon(
