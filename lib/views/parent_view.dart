@@ -523,6 +523,26 @@ class _ParentViewState extends State<ParentView> {
                         ),
                         const SizedBox(height: 6),
                       ],
+                      OutlinedButton.icon(
+                        onPressed: enCours
+                            ? null
+                            : () async {
+                                final code = sync.exporterCodeConnexionIpad();
+                                if (code == null) return;
+                                await Clipboard.setData(
+                                  ClipboardData(text: code),
+                                );
+                                if (!mounted) return;
+                                _message(
+                                  'Code copié ! Colle-le une seule fois dans le Labo sur iPad.',
+                                );
+                              },
+                        icon: const Icon(Icons.copy_all),
+                        label: const Text(
+                          '📋 Copier le code de connexion (iPad / Web)',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
                     ],
                     OutlinedButton.icon(
                       onPressed: enCours

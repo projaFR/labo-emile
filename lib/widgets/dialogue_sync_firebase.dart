@@ -1,15 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/labo_firebase_auth.dart';
 import '../services/labo_sync_service.dart';
 import '../theme.dart';
 
-/// Dialogue de configuration de la synchronisation Firebase (téléphone ↔ PC).
+/// Dialogue de configuration de la synchronisation Firebase (téléphone / iPad ↔ PC).
 Future<bool> ouvrirDialogueSyncFirebase(BuildContext context) async {
   final sync = LaboSyncService();
-  final oauthDetectee = await sync.detecterConfigOAuth();
+  final oauthDetectee = kIsWeb ? null : await sync.detecterConfigOAuth();
   if (!context.mounted) return false;
 
+  final codeIpadController = TextEditingController();
   final jsonOAuthController = TextEditingController();
   final cleController = TextEditingController(text: sync.webApiKeyActuelle);
   final emailController = TextEditingController(text: sync.emailCompte ?? '');
@@ -17,6 +19,65 @@ Future<bool> ouvrirDialogueSyncFirebase(BuildContext context) async {
   var masquerMdp = true;
   var enCours = false;
   String? erreur;
+
+  Widget blocCodeIpad(StateSetter setDialogState, BuildContext ctx) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Sur le PC (ou le téléphone déjà connecté), va dans Espace Parent → '
+        '« 📋 Copier le code de connexion (iPad / Web) », puis colle-le ici :',
+        style: TextStyle(fontSize: 12, color: LaboPalette.muted),
+      ),
+      const SizedBox(height: 8),
+      TextField(
+        controller: codeIpadController,
+        enabled: !enCours,
+        minLines: 2,
+        maxLines: 3,
+        autocorrect: false,
+        enableSuggestions: false,
+        decoration: const InputDecoration(
+          labelText: 'Code de connexion (LABO1:...)',
+          hintText: 'LABO1:eyJwcm9qZWN0SWQiOi...',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      ElevatedButton(
+        onPressed: enCours
+            ? null
+            : () async {
+                setDialogState(() {
+                  enCours = true;
+                  erreur = null;
+                });
+                try {
+                  await sync.connecterAvecCodeIpad(codeIpadController.text);
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                } on ErreurSyncLabo catch (e) {
+                  setDialogState(() {
+                    enCours = false;
+                    erreur = e.message;
+                  });
+                } catch (_) {
+                  setDialogState(() {
+                    enCours = false;
+                    erreur = 'Connexion impossible avec ce code.';
+                  });
+                }
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: LaboPalette.encre,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        ),
+        child: const Text(
+          '📱 Connecter cet appareil avec le code',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ],
+  );
 
   final resultat = await showDialog<bool>(
     context: context,
@@ -43,79 +104,92 @@ Future<bool> ouvrirDialogueSyncFirebase(BuildContext context) async {
                 ),
               ),
               const SizedBox(height: 12),
-              if (oauthDetectee != null)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '✅ Configuration Google trouvée automatiquement.',
-                    style: TextStyle(fontSize: 12, color: LaboPalette.good),
-                  ),
-                )
+              if (kIsWeb)
+                blocCodeIpad(setDialogState, ctx)
               else ...[
-                const Text(
-                  'Astuce : connecte-toi d’abord sur le PC puis clique sur '
-                  '« Transférer ce compte au téléphone (USB) » pour ne rien '
-                  'avoir à copier !',
-                  style: TextStyle(fontSize: 12, color: LaboPalette.muted),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: jsonOAuthController,
-                  enabled: !enCours,
-                  minLines: 2,
-                  maxLines: 4,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Contenu de firebase_config.json',
-                    hintText: '{"projectId": "...", "webApiKey": "..."}',
-                    border: OutlineInputBorder(),
+                if (oauthDetectee != null)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      '✅ Configuration Google trouvée automatiquement.',
+                      style: TextStyle(fontSize: 12, color: LaboPalette.good),
+                    ),
+                  )
+                else ...[
+                  const Text(
+                    'Astuce : connecte-toi d’abord sur le PC puis clique sur '
+                    '« Transférer ce compte au téléphone (USB) » pour ne rien '
+                    'avoir à copier !',
+                    style: TextStyle(fontSize: 12, color: LaboPalette.muted),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: jsonOAuthController,
+                    enabled: !enCours,
+                    minLines: 2,
+                    maxLines: 4,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Contenu de firebase_config.json',
+                      hintText: '{"projectId": "...", "webApiKey": "..."}',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                ElevatedButton(
+                  onPressed: enCours
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            enCours = true;
+                            erreur = null;
+                          });
+                          try {
+                            await sync.connecterAvecGoogle(
+                              jsonConfigManuel: oauthDetectee == null
+                                  ? jsonOAuthController.text
+                                  : null,
+                            );
+                            if (ctx.mounted) Navigator.pop(ctx, true);
+                          } on ErreurSyncLabo catch (e) {
+                            setDialogState(() {
+                              enCours = false;
+                              erreur = e.message;
+                            });
+                          } catch (_) {
+                            setDialogState(() {
+                              enCours = false;
+                              erreur = 'Connexion Google impossible.';
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: LaboPalette.encre,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 12,
+                    ),
+                  ),
+                  child: const Text(
+                    '🔵 Se connecter avec Google (comme Réviser)',
+                    textAlign: TextAlign.center,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: const EdgeInsets.only(top: 6),
+                  title: const Text(
+                    'Ou coller un code de connexion',
+                    style: TextStyle(fontSize: 13, color: LaboPalette.muted),
+                  ),
+                  children: [blocCodeIpad(setDialogState, ctx)],
+                ),
               ],
-              ElevatedButton(
-                onPressed: enCours
-                    ? null
-                    : () async {
-                        setDialogState(() {
-                          enCours = true;
-                          erreur = null;
-                        });
-                        try {
-                          await sync.connecterAvecGoogle(
-                            jsonConfigManuel:
-                                oauthDetectee == null
-                                    ? jsonOAuthController.text
-                                    : null,
-                          );
-                          if (ctx.mounted) Navigator.pop(ctx, true);
-                        } on ErreurSyncLabo catch (e) {
-                          setDialogState(() {
-                            enCours = false;
-                            erreur = e.message;
-                          });
-                        } catch (_) {
-                          setDialogState(() {
-                            enCours = false;
-                            erreur = 'Connexion Google impossible.';
-                          });
-                        }
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: LaboPalette.encre,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 12,
-                  ),
-                ),
-                child: const Text(
-                  '🔵 Se connecter avec Google (comme Réviser)',
-                  textAlign: TextAlign.center,
-                ),
-              ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(top: 6),

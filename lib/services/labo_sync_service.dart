@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +11,7 @@ import '../logic/sync_logic.dart';
 import '../models/lesson_model.dart';
 import 'labo_firebase_auth.dart';
 import 'labo_firestore_client.dart';
+import 'labo_sync_plateforme.dart';
 import 'memoire_service.dart';
 
 enum EtatSyncLabo { nonConfigure, synchronisation, aJour, horsLigne, erreur }
@@ -230,36 +230,73 @@ class LaboSyncService extends ChangeNotifier {
     }
   }
 
-  Future<bool> _ouvrirUrlNavigateur(Uri url) async {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-      try {
-        final res = await Process.run(
-          'powershell',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-Command',
-            r'Start-Process $env:LABO_AUTH_URL',
-          ],
-          environment: {'LABO_AUTH_URL': url.toString()},
-        );
-        return res.exitCode == 0;
-      } catch (_) {
-        return false;
-      }
+  Future<bool> _ouvrirUrlNavigateur(Uri url) => ouvrirNavigateurOAuth(url, (
+    u,
+  ) async {
+    try {
+      final ok = await _canalPlateforme.invokeMethod<bool>('ouvrirUrl', {
+        'url': u.toString(),
+      });
+      return ok ?? false;
+    } catch (_) {
+      return false;
     }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        final ok = await _canalPlateforme.invokeMethod<bool>(
-          'ouvrirUrl',
-          {'url': url.toString()},
-        );
-        return ok ?? false;
-      } catch (_) {
-        return false;
-      }
+  });
+
+  /// Code texte à copier depuis le PC pour connecter un iPad / navigateur (Option A).
+  String? exporterCodeConnexionIpad() {
+    final cfg = _auth.config;
+    if (cfg == null) return null;
+    final b64 = base64UrlEncode(
+      utf8.encode(jsonEncode(cfg.toJson())),
+    ).replaceAll('=', '');
+    return 'LABO1:$b64';
+  }
+
+  /// Connecte cet appareil (ex. iPad Safari) à partir du code copié depuis le PC.
+  Future<void> connecterAvecCodeIpad(String saisie) async {
+    await initialiser();
+    var propre = saisie.replaceAll(RegExp(r'\s+'), '');
+    if (propre.startsWith('LABO1:')) {
+      propre = propre.substring('LABO1:'.length);
     }
-    return false;
+    ConfigFirebaseLabo? session;
+    try {
+      final jsonStr = utf8.decode(base64Url.decode(base64Url.normalize(propre)));
+      session = ConfigFirebaseLabo.tryParse(jsonStr);
+    } catch (_) {
+      session = null;
+    }
+    if (session == null) {
+      throw const ErreurSyncLabo(
+        'Code de connexion invalide. Copie-le à nouveau depuis le PC.',
+      );
+    }
+
+    _debounce?.cancel();
+    _erreur = null;
+    await _auth.importerSession(session);
+    if (session.desktopClientId != null &&
+        session.desktopClientSecret != null) {
+      final oauth = ConfigOAuthGoogleLabo(
+        projectId: session.projectId,
+        webApiKey: session.webApiKey,
+        desktopClientId: session.desktopClientId!,
+        desktopClientSecret: session.desktopClientSecret!,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(kCleOAuthFirebase, jsonEncode(oauth.toJson()));
+    }
+    _etat = EtatSyncLabo.synchronisation;
+    notifyListeners();
+
+    final ok = await synchroniserMaintenant();
+    if (!ok) {
+      throw ErreurSyncLabo(
+        _erreur ?? 'Code accepté, mais Firestore a refusé la synchro.',
+        horsLigne: _etat == EtatSyncLabo.horsLigne,
+      );
+    }
   }
 
   /// Sur Windows, pousse directement la session connectée vers le téléphone USB.
@@ -271,58 +308,7 @@ class LaboSyncService extends ChangeNotifier {
     final b64 = base64UrlEncode(
       utf8.encode(jsonEncode(cfg.toJson())),
     ).replaceAll('=', '');
-
-    var adbExe = 'adb';
-    final localAppData = Platform.environment['LOCALAPPDATA'] ?? '';
-    if (localAppData.isNotEmpty) {
-      final candidat = '$localAppData\\Android\\Sdk\\platform-tools\\adb.exe';
-      if (File(candidat).existsSync()) {
-        adbExe = candidat;
-      }
-    }
-
-    try {
-      await Process.run(adbExe, ['start-server']);
-      await Future<void>.delayed(const Duration(seconds: 4));
-      final res = await Process.run(adbExe, [
-        'shell',
-        'am',
-        'start',
-        '-n',
-        'fr.thibaut.laboemile/.MainActivity',
-        '--es',
-        'firebase_session_b64',
-        b64,
-      ]);
-      final sortie = '${res.stdout}\n${res.stderr}';
-      if (res.exitCode == 0 && !sortie.contains('Error:')) {
-        return (
-          ok: true,
-          message:
-              'Compte Google envoyé au téléphone ! Le Labo d’Émile sur le téléphone est maintenant connecté.',
-        );
-      }
-      final bas = sortie.toLowerCase();
-      if (bas.contains('unauthorized') || bas.contains('authorizing')) {
-        return (
-          ok: false,
-          message:
-              'Téléphone non autorisé : déverrouille-le et accepte le débogage USB.',
-        );
-      }
-      if (bas.contains('no devices')) {
-        return (ok: false, message: 'Aucun téléphone détecté en USB.');
-      }
-      return (
-        ok: false,
-        message: 'Transfert USB impossible (vérifie le câble et le débogage USB).',
-      );
-    } catch (_) {
-      return (
-        ok: false,
-        message: 'Outil ADB introuvable ou transfert USB impossible.',
-      );
-    }
+    return envoyerSessionUsbAdb(b64);
   }
 
   Future<void> connecterCompte({
