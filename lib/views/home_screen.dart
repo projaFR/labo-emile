@@ -16,6 +16,7 @@ import '../services/questions_masquees_service.dart';
 import '../services/settings_service.dart';
 import '../services/sound_service.dart';
 import '../theme.dart';
+import '../widgets/badge_rond.dart';
 import '../widgets/confetti_couche.dart';
 import '../widgets/route_rapide.dart';
 import 'aujourdhui_view.dart';
@@ -53,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late ConfettiController _confettiController;
   final Map<String, List<bool>> _lessonsRewards = {};
+  final Map<String, int> _rangsBadgesConnus = {};
 
   // Copie indépendante de la base initiale — évite de polluer InitialDatabase.data
   // (qui est static final et partagé) avec les leçons custom.
@@ -102,7 +104,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _surMemoire() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    BadgeLecon? nouveauBadge;
+    for (final r in _toutes) {
+      final b = badgePourLecon(
+        r,
+        _etoilesDe(r.lecon.titre),
+        memoire: _memoire,
+      );
+      final prev = _rangsBadgesConnus[r.lecon.titre] ?? 0;
+      if (b.niveau.rang > prev) {
+        _rangsBadgesConnus[r.lecon.titre] = b.niveau.rang;
+        if (b.debloque) nouveauBadge = b;
+      }
+    }
+    setState(() {});
+    if (nouveauBadge != null) {
+      final b = nouveauBadge;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _celebrerBadgeLecon(b);
+      });
+    }
   }
 
   void _surMasquees() {
@@ -186,11 +208,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _totalDiamonds = prefs.getInt('emile_diamonds') ?? 0;
       _database.forEach((matiere, lessons) {
         for (var l in lessons) {
-          _lessonsRewards[l.titre] = [
+          final etoiles = [
             prefs.getBool('${l.titre}_star_astuces') ?? false,
             prefs.getBool('${l.titre}_star_train') ?? false,
             prefs.getBool('${l.titre}_star_quiz') ?? false,
           ];
+          _lessonsRewards[l.titre] = etoiles;
+          _rangsBadgesConnus[l.titre] = badgePourLecon(
+            LeconRef(matiere, l),
+            etoiles,
+            memoire: _memoire,
+          ).niveau.rang;
         }
       });
     });
@@ -262,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SoundService().playStar();
         _confettiController.play();
         final etoilesLecon = _lessonsRewards[lessonTitle]!;
-        String annonce = "⭐ Étoile débloquée pour « $lessonTitle » ! (+5 💎)";
+        BadgeLecon? badgeDebloque;
         if (nombreEtapesFaites(etoilesLecon) >= 3) {
           final match = _toutes.where((r) => r.lecon.titre == lessonTitle);
           if (match.isNotEmpty) {
@@ -271,17 +299,24 @@ class _HomeScreenState extends State<HomeScreen> {
               etoilesLecon,
               memoire: _memoire,
             );
-            annonce =
-                '⭐ 3 étoiles ! Badge Niveau ${badge.niveau.rang} (${badge.niveau.libelle}) débloqué : ${badge.nom} (+5 💎)';
+            _rangsBadgesConnus[lessonTitle] = badge.niveau.rang;
+            if (badge.debloque) badgeDebloque = badge;
           }
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(annonce),
-            backgroundColor: LaboPalette.warn,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        if (badgeDebloque != null) {
+          final b = badgeDebloque;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _celebrerBadgeLecon(b);
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("⭐ Étoile débloquée pour « $lessonTitle » ! (+5 💎)"),
+              backgroundColor: LaboPalette.warn,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     });
   }
@@ -362,6 +397,77 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontSize: 20,
                 fontWeight: FontWeight.w900,
               ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: LaboPalette.or,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: LaboShape.card),
+              ),
+              child: const Text(
+                "Super ! 🚀",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _celebrerBadgeLecon(BadgeLecon badge) {
+    SoundService().playPerfect();
+    _confettiController.play();
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: LaboPalette.nuit,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.25, end: 1.0),
+              duration: const Duration(milliseconds: 650),
+              curve: Curves.elasticOut,
+              builder: (_, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
+              child: BadgeRond(
+                diametre: 96,
+                cleIcone: badge.cleIcone,
+                niveau: badge.niveau,
+                emoji: badge.emoji,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              "Bravo, tu as eu la médaille !",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              badge.nom,
+              style: const TextStyle(
+                color: LaboPalette.or,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Niveau ${badge.niveau.rang} · ${badge.niveau.libelle} (${badge.titreLecon})",
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),

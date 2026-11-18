@@ -115,13 +115,11 @@ class _FlashcardsViewState extends State<FlashcardsView> {
       showAnswer = false;
 
       if (deck.isEmpty) {
-        // Paquet terminé : un diamant fixe, et l'étoile seulement si aucune
-        // carte n'a été notée « à revoir » (comme le dit le README).
+        // Paquet terminé : toutes les cartes ont fini par être maîtrisées
+        // (même après un ou plusieurs « À revoir ») → diamant du jour + étoile ⭐.
         widget.onDiamondEarned();
-        if (!_aRevoir) {
-          SoundService().playStar();
-          widget.onLessonCompleted();
-        }
+        SoundService().playStar();
+        widget.onLessonCompleted();
         _envoyerResultat();
       }
     });
@@ -135,7 +133,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
     final r = ResultatEtape(
       premierCoup: (_nbTotal - _revoir.length).clamp(0, _nbTotal),
       rates: _revoir.length,
-      etoile: !_aRevoir,
+      etoile: true,
       aRetravailler: List.of(_revoir),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -317,7 +315,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
               const SizedBox(height: 8),
               Text(
                 _aRevoir
-                    ? "Paquet terminé !${_diamantDispo ? ' (+1 💎)' : ''}\nRefais-le sans « À revoir » pour gagner l'étoile ⭐"
+                    ? "Paquet terminé (toutes les cartes maîtrisées) !\n⭐ Étoile${_diamantDispo ? ' et +1 💎' : ''}"
                     : "Paquet terminé sans « À revoir » !\n⭐ Étoile${_diamantDispo ? ' et +1 💎' : ''}",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15, color: Colors.black54),

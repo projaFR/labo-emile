@@ -153,7 +153,10 @@ Règles strictes :
    - "matiere" : une parmi ["Mathématiques", "Français", "Sciences", "Histoire", "Géographie", "Anglais"].
    - "titre" : titre CLASSIQUE et scolaire de la leçon (ex : "Le pluriel des noms en -ou", "Multiplier par 10, 100, 1000").
    - "succes" : 1 emoji suivi d'un espace puis d'un petit nom de badge RIGOLO et valorisant lié au thème de la leçon (ex : "🦉 Dompteur de Hiboux à Genoux", "🚀 Pilote des Grands Nombres").
-   - "astuces" : liste de 4 à 6 cartes courtes {"question": "...", "reponse": "..."} résumant les règles et exemples de la feuille avec les mots exacts enseignés en classe.
+   - "astuces" : liste de flashcards {"question": "...", "reponse": "..."} :
+       * Couvre TOUTES les notions présentes dans la leçon (et UNIQUEMENT les notions du cours, sans rien inventer hors du support).
+       * Adapte le nombre de cartes à la longueur réelle du cours (aucun nombre fixe : 2 à 3 cartes si la leçon est très courte, davantage si la leçon contient beaucoup de notions).
+       * Chaque recto ("question") doit être une question COMPLÈTE et 100 % AUTONOME (les cartes sont mélangées et revues plus tard) : inclus toujours le sujet explicite dans la question (ex : "Combien de faces possède un cube ?" — JAMAIS "Et combien a-t-il de faces ?" ni "Hibou" tout seul).
    - "exercices" : liste de 10 exercices de difficulté progressive (découverte, entraînement, défi), tous reliés aux notions de la leçon :
        * Pour une réponse numérique / calcul :
          - mets un ou plusieurs "[?]" dans "question",
@@ -183,6 +186,10 @@ Règles strictes :
        * "astuceErreur" : indice court (moins de 15 mots) qui aide à réfléchir sans jamais donner la réponse.
    - "quiz" : liste de 5 questions courtes (lisibles en moins de 5 s) pour le Défi Chrono :
        {"question": "...", "options": ["...", "...", "...", "..."], "indexCorrect": 0} (indexCorrect entre 0 et 3).
+3. VARIÉTÉ ENTRE LES 3 PARTIES (TRÈS IMPORTANT) :
+   Les parties "astuces", "exercices" et "quiz" s'enchaînent pendant la séance :
+   - INTERDIT de réutiliser les mêmes énoncés, les mêmes nombres (en maths), les mêmes phrases ou les mêmes exemples (en français, histoire, sciences…) d'une partie à l'autre.
+   - Chaque partie doit travailler les mêmes notions du cours mais avec des exemples, des chiffres, des phrases ou des angles différents.
 ''';
 
 /// Envoie les [photos] à Gemini et renvoie la leçon validée prête à importer.
