@@ -374,6 +374,13 @@ Future<void> main() async {
         'reponseAttendue': 'Vrai',
         'astuceErreur': 'Pense à la liste des 7 mots.',
       },
+      {
+        'type': 'ordre',
+        'question': 'Range du plus petit au plus grand :',
+        'consigne': 'Clique dans le bon ordre :',
+        'reponsesMultiples': ['12', '45', '108'],
+        'astuceErreur': 'Compare les centaines d’abord.',
+      },
     ],
     'quiz': [],
   }));
@@ -381,6 +388,7 @@ Future<void> main() async {
   assert(exD.estSaisieMot && exD.reponsesAcceptees.single == 'des hiboux');
   assert(exD.explication == 'Hibou prend un -x au pluriel.');
   assert(leconLotD.lecon.exercices[1].type == ExerciseType.textQcm);
+  assert(leconLotD.lecon.exercices[2].type == ExerciseType.ordre);
 
   var typeInconnuRefuse = false;
   try {

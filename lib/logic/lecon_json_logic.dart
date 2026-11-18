@@ -8,6 +8,7 @@ const Set<String> kTypesExercicesConnus = {
   'singleInput',
   'saisieMot',
   'vraiFaux',
+  'ordre',
 };
 
 /// Résultat d'une analyse JSON de leçon (matière + modèle validé).
@@ -129,23 +130,35 @@ LeconImportee analyserJsonLecon(String rawText) {
         ? <String>[]
         : [for (final r in rawMultiples) r.toString()];
 
-    if (nbTrous > 1 && reponsesMultiples.isEmpty) {
-      final isQcmSingleHole = optionsList.isNotEmpty && nbTrous == 1;
-      if (!isQcmSingleHole) {
+    final rawTypePre = item['type'];
+    final estOrdre = rawTypePre is String && rawTypePre.trim() == 'ordre';
+
+    if (estOrdre) {
+      if (reponsesMultiples.length < 2) {
         throw FormatException(
-          "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
-          "mais 'reponsesMultiples' est absent ou vide.\n"
-          "Corrige le JSON ou relance la génération.",
+          "❌ Exercice n°${i + 1} : un exercice 'ordre' doit avoir au moins "
+          "2 éléments dans 'reponsesMultiples'.",
         );
       }
-    }
+    } else {
+      if (nbTrous > 1 && reponsesMultiples.isEmpty) {
+        final isQcmSingleHole = optionsList.isNotEmpty && nbTrous == 1;
+        if (!isQcmSingleHole) {
+          throw FormatException(
+            "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
+            "mais 'reponsesMultiples' est absent ou vide.\n"
+            "Corrige le JSON ou relance la génération.",
+          );
+        }
+      }
 
-    if (reponsesMultiples.isNotEmpty && reponsesMultiples.length != nbTrous) {
-      throw FormatException(
-        "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
-        "mais ${reponsesMultiples.length} réponse(s) dans 'reponsesMultiples'.\n"
-        "Le nombre doit être identique.",
-      );
+      if (reponsesMultiples.isNotEmpty && reponsesMultiples.length != nbTrous) {
+        throw FormatException(
+          "❌ Exercice n°${i + 1} : $nbTrous trous [?] détectés "
+          "mais ${reponsesMultiples.length} réponse(s) dans 'reponsesMultiples'.\n"
+          "Le nombre doit être identique.",
+        );
+      }
     }
 
     final rawConsigne = item['consigne'];

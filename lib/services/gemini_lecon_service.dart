@@ -167,6 +167,8 @@ Règles strictes :
          - ajoute facultativement "reponsesAcceptees": [...] s'il y a plusieurs écritures justes.
        * Pour une affirmation Vrai ou Faux :
          - mets "type": "vraiFaux", "options": ["Vrai", "Faux"], et "reponseAttendue": "Vrai" ou "Faux".
+       * Pour remettre des nombres ou des mots dans l'ordre :
+         - mets "type": "ordre", laisse "options": [], et mets la liste dans le BON ordre dans "reponsesMultiples" (au moins 3 éléments).
        * Pour une règle ou du français (QCM) :
          - mets 0 ou 1 "[?]" dans "question",
          - fournis exactement 4 "options",

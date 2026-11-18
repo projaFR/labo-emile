@@ -38,6 +38,9 @@ int comboApresErreur(int combo) => combo > 0 ? combo - 1 : 0;
 
 /// Texte de la bonne réponse, y compris pour les nombres.
 String texteBonneReponse(ExerciseModel ex) {
+  if (ex.type == ExerciseType.ordre && ex.reponsesMultiples.isNotEmpty) {
+    return ex.reponsesMultiples.map((r) => r.trim()).join(' → ');
+  }
   if (ex.reponsesMultiples.isNotEmpty) {
     return ex.reponsesMultiples.map((r) => r.trim()).join(' ; ');
   }

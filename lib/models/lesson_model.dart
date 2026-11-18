@@ -4,6 +4,7 @@ enum ExerciseType {
   numericBlanks, // Maths à trous : [?] → champ numérique
   textQcm, // Français QCM  : options textuelles
   singleInput, // Trou unique texte libre
+  ordre, // Remettre des éléments dans l'ordre
 }
 
 class LessonModel {
@@ -90,6 +91,7 @@ class ExerciseModel {
   // ✅ FIX : Getter qui détermine le type de façon explicite et centralisée.
   //          Plus besoin de répliquer cette logique dans chaque vue.
   ExerciseType get type {
+    if (typeExplicite == 'ordre') return ExerciseType.ordre;
     if (typeExplicite == 'saisieMot' || typeExplicite == 'singleInput') {
       return ExerciseType.singleInput;
     }

@@ -72,6 +72,9 @@ class _ExerciseViewState extends State<ExerciseView> {
   List<String> _selectedOptions = [];
   int _activeSlot = 0;
 
+  // ── Ordre (indices sélectionnés dans _shuffledOptions) ────────────────────
+  final List<int> _ordreChoisisIndices = [];
+
   static const String _hole = '[?]';
 
   // ── Exercice courant (via les indices de la séance) ───────────────────────
@@ -196,6 +199,7 @@ class _ExerciseViewState extends State<ExerciseView> {
     _selectedOptions = List.filled(nbSlots, '');
 
     // ✅ Options mélangées aléatoirement pour chaque question QCM (sauf Vrai/Faux)
+    _ordreChoisisIndices.clear();
     if (currentEx.type == ExerciseType.textQcm) {
       if (currentEx.typeExplicite == 'vraiFaux') {
         _shuffledOptions = currentEx.options.isNotEmpty
@@ -205,6 +209,11 @@ class _ExerciseViewState extends State<ExerciseView> {
         _shuffledOptions = List<String>.from(currentEx.options)
           ..shuffle(Random());
       }
+    } else if (currentEx.type == ExerciseType.ordre) {
+      final base = currentEx.options.isNotEmpty
+          ? currentEx.options
+          : currentEx.reponsesMultiples;
+      _shuffledOptions = List<String>.from(base)..shuffle(Random());
     } else {
       _shuffledOptions = [];
       final int nbChamps = nbTrous > 0 ? nbTrous : 1;
@@ -292,6 +301,24 @@ class _ExerciseViewState extends State<ExerciseView> {
     _appliquerResultat(allGood);
   }
 
+  // ── Validation Ordre ──────────────────────────────────────────────────────
+  void _validateOrdre(ExerciseModel currentEx) {
+    if (_isSubmitted) return;
+    if (_ordreChoisisIndices.length != currentEx.reponsesMultiples.length) {
+      return;
+    }
+    var allGood = true;
+    for (int i = 0; i < currentEx.reponsesMultiples.length; i++) {
+      final choisi = _shuffledOptions[_ordreChoisisIndices[i]].trim();
+      final attendu = currentEx.reponsesMultiples[i].trim();
+      if (choisi.toLowerCase() != attendu.toLowerCase()) {
+        allGood = false;
+        break;
+      }
+    }
+    _appliquerResultat(allGood);
+  }
+
   /// Applique le résultat d'un essai : juste, 2e essai avec indice, ou
   /// bonne réponse montrée.
   void _appliquerResultat(bool estJuste) {
@@ -339,6 +366,7 @@ class _ExerciseViewState extends State<ExerciseView> {
           }
           _selectedOptions = List.filled(_selectedOptions.length, '');
           _activeSlot = 0;
+          _ordreChoisisIndices.clear();
           break;
         case ResultatEssai.montrerReponse:
           _isSubmitted = true;
@@ -665,10 +693,14 @@ class _ExerciseViewState extends State<ExerciseView> {
 
     final currentEx = _currentExercise;
     final bool isQcm = currentEx.type == ExerciseType.textQcm;
+    final bool isOrdre = currentEx.type == ExerciseType.ordre;
     final int nbTrous = currentEx.question.split(_hole).length - 1;
     final bool hasVisibleSlots = isQcm && nbTrous > 0;
     final bool allSlotsFilled = !_selectedOptions.contains('');
-    final bool canValidate = isQcm ? allSlotsFilled : true;
+    final bool allOrdrePlaced =
+        _ordreChoisisIndices.length == currentEx.reponsesMultiples.length;
+    final bool canValidate =
+        isQcm ? allSlotsFilled : (isOrdre ? allOrdrePlaced : true);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -747,6 +779,82 @@ class _ExerciseViewState extends State<ExerciseView> {
                           SizedBox(height: gap1),
                           _buildQuestionWithSlots(currentEx),
                           SizedBox(height: gap2),
+
+                          // Zone interactive Ordre
+                          if (isOrdre) ...[
+                            Container(
+                              width: double.infinity,
+                              constraints: const BoxConstraints(minHeight: 54),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: LaboPalette.line),
+                              ),
+                              child: _ordreChoisisIndices.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        'Clique sur les étiquettes ci-dessous dans le bon ordre',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: LaboPalette.muted,
+                                        ),
+                                      ),
+                                    )
+                                  : Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      alignment: WrapAlignment.center,
+                                      children: [
+                                        for (var pos = 0;
+                                            pos < _ordreChoisisIndices.length;
+                                            pos++)
+                                          InputChip(
+                                            label: Text(
+                                              _shuffledOptions[
+                                                  _ordreChoisisIndices[pos]],
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            backgroundColor: Colors.blue.shade50,
+                                            onPressed: _isSubmitted
+                                                ? null
+                                                : () => setState(() {
+                                                      _ordreChoisisIndices
+                                                          .removeAt(pos);
+                                                    }),
+                                          ),
+                                      ],
+                                    ),
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                for (var idx = 0;
+                                    idx < _shuffledOptions.length;
+                                    idx++)
+                                  ActionChip(
+                                    label: Text(_shuffledOptions[idx]),
+                                    backgroundColor:
+                                        _ordreChoisisIndices.contains(idx)
+                                            ? Colors.grey.shade200
+                                            : Colors.white,
+                                    onPressed: _isSubmitted ||
+                                            _ordreChoisisIndices.contains(idx)
+                                        ? null
+                                        : () => setState(() {
+                                              _ordreChoisisIndices.add(idx);
+                                            }),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                          ],
 
                           // Boutons options QCM (mélangés)
                           if (isQcm)
@@ -855,7 +963,9 @@ class _ExerciseViewState extends State<ExerciseView> {
                       : (canValidate
                             ? () => isQcm
                                   ? _validateQcm(currentEx)
-                                  : _validateNumericAnswers(currentEx)
+                                  : (isOrdre
+                                        ? _validateOrdre(currentEx)
+                                        : _validateNumericAnswers(currentEx))
                             : null),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _isSubmitted
