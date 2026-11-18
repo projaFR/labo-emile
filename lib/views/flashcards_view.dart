@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import '../models/lesson_model.dart';
 import '../logic/memoire.dart';
@@ -40,6 +41,7 @@ class _FlashcardsViewState extends State<FlashcardsView> {
   int _nbTotal = 0; // résultats du tour, pour le parcours
   final List<String> _revoir = []; // cartes notées « à revoir » (sans doublon)
   bool _resultatEnvoye = false;
+  bool _diamantDispo = true;
 
   @override
   void initState() {
@@ -65,6 +67,18 @@ class _FlashcardsViewState extends State<FlashcardsView> {
       _revoir.clear();
       _resultatEnvoye = false;
     });
+    _verifierDiamantDispo();
+  }
+
+  Future<void> _verifierDiamantDispo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final today = '${now.year}-${now.month}-${now.day}';
+      final dispo =
+          prefs.getString('cartes_diamant_${widget.lesson.titre}') != today;
+      if (mounted) setState(() => _diamantDispo = dispo);
+    } catch (_) {}
   }
 
   void handleResult(bool success) {
@@ -303,8 +317,8 @@ class _FlashcardsViewState extends State<FlashcardsView> {
               const SizedBox(height: 8),
               Text(
                 _aRevoir
-                    ? "Paquet terminé ! (+1 💎)\nRefais-le sans « À revoir » pour gagner l'étoile ⭐"
-                    : "Paquet terminé sans « À revoir » !\n⭐ Étoile et +1 💎",
+                    ? "Paquet terminé !${_diamantDispo ? ' (+1 💎)' : ''}\nRefais-le sans « À revoir » pour gagner l'étoile ⭐"
+                    : "Paquet terminé sans « À revoir » !\n⭐ Étoile${_diamantDispo ? ' et +1 💎' : ''}",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15, color: Colors.black54),
               ),

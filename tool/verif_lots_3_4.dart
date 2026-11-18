@@ -352,7 +352,7 @@ Future<void> main() async {
         qSuivi.cle,
   );
 
-  // 8. Lot D : saisieMot, reponsesAcceptees, explication & rejet type inconnu.
+  // 8. Lot D & E : saisieMot, vraiFaux, reponsesAcceptees, explication & rejet type inconnu.
   final leconLotD = analyserJsonLecon(jsonEncode({
     'matiere': 'Français',
     'titre': 'Pluriel -ou',
@@ -367,12 +367,20 @@ Future<void> main() async {
         'astuceErreur': 'Pense aux 7 exceptions.',
         'explication': 'Hibou prend un -x au pluriel.',
       },
+      {
+        'type': 'vraiFaux',
+        'question': 'Le mot « bijou » prend un -x au pluriel.',
+        'consigne': 'Vrai ou Faux ?',
+        'reponseAttendue': 'Vrai',
+        'astuceErreur': 'Pense à la liste des 7 mots.',
+      },
     ],
     'quiz': [],
   }));
-  final exD = leconLotD.lecon.exercices.single;
+  final exD = leconLotD.lecon.exercices.first;
   assert(exD.estSaisieMot && exD.reponsesAcceptees.single == 'des hiboux');
   assert(exD.explication == 'Hibou prend un -x au pluriel.');
+  assert(leconLotD.lecon.exercices[1].type == ExerciseType.textQcm);
 
   var typeInconnuRefuse = false;
   try {

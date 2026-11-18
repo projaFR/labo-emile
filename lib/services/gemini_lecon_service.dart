@@ -165,6 +165,8 @@ Règles strictes :
          - laisse "options" vide ("options": []),
          - mets le mot attendu dans "reponseAttendue" (ex : "hiboux"),
          - ajoute facultativement "reponsesAcceptees": [...] s'il y a plusieurs écritures justes.
+       * Pour une affirmation Vrai ou Faux :
+         - mets "type": "vraiFaux", "options": ["Vrai", "Faux"], et "reponseAttendue": "Vrai" ou "Faux".
        * Pour une règle ou du français (QCM) :
          - mets 0 ou 1 "[?]" dans "question",
          - fournis exactement 4 "options",

@@ -195,10 +195,16 @@ class _ExerciseViewState extends State<ExerciseView> {
         : nbTrous;
     _selectedOptions = List.filled(nbSlots, '');
 
-    // ✅ Options mélangées aléatoirement pour chaque question QCM
+    // ✅ Options mélangées aléatoirement pour chaque question QCM (sauf Vrai/Faux)
     if (currentEx.type == ExerciseType.textQcm) {
-      _shuffledOptions = List<String>.from(currentEx.options)
-        ..shuffle(Random());
+      if (currentEx.typeExplicite == 'vraiFaux') {
+        _shuffledOptions = currentEx.options.isNotEmpty
+            ? List<String>.from(currentEx.options)
+            : ['Vrai', 'Faux'];
+      } else {
+        _shuffledOptions = List<String>.from(currentEx.options)
+          ..shuffle(Random());
+      }
     } else {
       _shuffledOptions = [];
       final int nbChamps = nbTrous > 0 ? nbTrous : 1;

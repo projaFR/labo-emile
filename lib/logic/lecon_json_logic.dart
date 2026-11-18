@@ -7,6 +7,7 @@ const Set<String> kTypesExercicesConnus = {
   'textQcm',
   'singleInput',
   'saisieMot',
+  'vraiFaux',
 };
 
 /// Résultat d'une analyse JSON de leçon (matière + modèle validé).

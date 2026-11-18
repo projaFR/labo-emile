@@ -93,7 +93,9 @@ class ExerciseModel {
     if (typeExplicite == 'saisieMot' || typeExplicite == 'singleInput') {
       return ExerciseType.singleInput;
     }
-    if (typeExplicite == 'textQcm') return ExerciseType.textQcm;
+    if (typeExplicite == 'textQcm' || typeExplicite == 'vraiFaux') {
+      return ExerciseType.textQcm;
+    }
     if (typeExplicite == 'numericBlanks') return ExerciseType.numericBlanks;
     if (options.isNotEmpty) return ExerciseType.textQcm;
     if (reponsesMultiples.isNotEmpty) return ExerciseType.numericBlanks;
