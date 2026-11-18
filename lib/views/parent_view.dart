@@ -4,6 +4,7 @@ import '../logic/accueil_logic.dart';
 import '../logic/memoire.dart';
 import '../logic/sauvegarde.dart';
 import '../logic/suivi_parent_logic.dart';
+import '../models/lesson_model.dart';
 import '../version.dart';
 import '../theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,7 @@ import '../services/questions_masquees_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/dialogue_cle_gemini.dart';
 import '../widgets/dialogue_sync_firebase.dart';
+import 'exercise_view.dart';
 
 class ParentView extends StatefulWidget {
   final int currentDiamonds;
@@ -55,6 +57,7 @@ class ParentView extends StatefulWidget {
 class _ParentViewState extends State<ParentView> {
   late String? _titreASupprimer =
       widget.titresLecons.isEmpty ? null : widget.titresLecons.first;
+  late int _diamantsAffiches = widget.currentDiamonds;
   String? _cleGemini;
   bool _envoiUsbEnCours = false;
 
@@ -67,6 +70,110 @@ class _ParentViewState extends State<ParentView> {
   Future<void> _chargerCleGemini() async {
     final cle = await lireCleGemini();
     if (mounted) setState(() => _cleGemini = cle);
+  }
+
+  static const LessonModel _leconDemoTest = LessonModel(
+    titre: '🎮 Démo : tous les types',
+    astuces: [],
+    exercices: [
+      ExerciseModel(
+        question: '14 x 4 = ([?] x 4) + ([?] x 4)',
+        consigne: 'Calcul à trous :',
+        reponsesMultiples: ['10', '4'],
+        astuceErreur: '14 = 10 + 4.',
+      ),
+      ExerciseModel(
+        question: 'Combien de faces a un cube ?',
+        consigne: 'QCM :',
+        options: ['4', '6', '8', '12'],
+        reponseAttendue: '6',
+        astuceErreur: 'Compte comme sur un dé.',
+      ),
+      ExerciseModel(
+        typeExplicite: 'saisieMot',
+        question: 'Des [?] (hibou)',
+        consigne: 'Mot à écrire :',
+        reponseAttendue: 'hiboux',
+        reponsesAcceptees: ['des hiboux'],
+        astuceErreur: 'Pense aux 7 exceptions en -ou.',
+        explication: 'Hibou prend un -x au pluriel.',
+      ),
+      ExerciseModel(
+        typeExplicite: 'vraiFaux',
+        question: 'Un pavé droit a 6 faces rectangulaires.',
+        consigne: 'Vrai ou Faux ?',
+        options: ['Vrai', 'Faux'],
+        reponseAttendue: 'Vrai',
+        astuceErreur: 'Pense à une boîte à chaussures.',
+      ),
+      ExerciseModel(
+        typeExplicite: 'ordre',
+        question: 'Range ces nombres du plus petit au plus grand :',
+        consigne: 'Remets dans l’ordre :',
+        reponsesMultiples: ['18', '45', '102', '340'],
+        astuceErreur: 'Compare d’abord les centaines.',
+      ),
+      ExerciseModel(
+        typeExplicite: 'association',
+        question: 'Relie chaque multiplication à son résultat :',
+        consigne: 'Associe les paires :',
+        options: ['3 x 4', '5 x 5', '2 x 9'],
+        reponsesMultiples: ['12', '25', '18'],
+        astuceErreur: 'Révise les tables de 2, 3 et 5.',
+      ),
+      ExerciseModel(
+        typeExplicite: 'classement',
+        question: 'Classe ces mots selon leur nature :',
+        consigne: 'Range dans la bonne boîte :',
+        options: ['chien', 'courir', 'table', 'sauter'],
+        reponsesMultiples: ['Nom', 'Verbe', 'Nom', 'Verbe'],
+        astuceErreur: 'Le verbe indique une action.',
+      ),
+    ],
+    quiz: [],
+  );
+
+  Future<void> _ouvrirTestExercices() async {
+    final choix = await showDialog<LessonModel>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text("🧪 Choisir une leçon à tester"),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, _leconDemoTest),
+            child: const Text(
+              "🎮 Démo : tous les types d'exercices (7 ex.)",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          const Divider(),
+          for (final ref in widget.lecons)
+            if (ref.lecon.exercices.isNotEmpty)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, ref.lecon),
+                child: Text(
+                  "${ref.lecon.titre} (${ref.lecon.exercices.length} ex.)",
+                ),
+              ),
+        ],
+      ),
+    );
+    if (choix == null || !mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text("🧪 Test : ${choix.titre}")),
+          body: ExerciseView(
+            lesson: choix,
+            modeTestParent: true,
+            onSuccess: () {},
+            onFailure: () {},
+            onPerfectScore: () {},
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _ouvrirSuiviDetaille() async {
@@ -528,23 +635,51 @@ class _ParentViewState extends State<ParentView> {
               ],
             ),
             const Divider(height: 20),
-            const Text(
-              "💎 Récompenses d'Émile",
-              style: TextStyle(
+            Text(
+              "💎 Récompenses d'Émile (solde : $_diamantsAffiches 💎)",
+              style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: LaboPalette.muted,
               ),
             ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.center,
               children: [
+                OutlinedButton(
+                  onPressed: _diamantsAffiches <= 0
+                      ? null
+                      : () {
+                          widget.onDiamondsChanged(-1);
+                          setState(() {
+                            _diamantsAffiches =
+                                (_diamantsAffiches - 1).clamp(0, 999999);
+                          });
+                        },
+                  child: const Text("-1 💎"),
+                ),
+                OutlinedButton(
+                  onPressed: _diamantsAffiches <= 0
+                      ? null
+                      : () {
+                          widget.onDiamondsChanged(-5);
+                          setState(() {
+                            _diamantsAffiches =
+                                (_diamantsAffiches - 5).clamp(0, 999999);
+                          });
+                        },
+                  child: const Text("-5 💎"),
+                ),
                 ElevatedButton.icon(
-                  onPressed: () =>
-                      widget.onDiamondsChanged(10), // ✅ envoie +10 relatif
-                  icon: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () {
+                    widget.onDiamondsChanged(10);
+                    setState(() => _diamantsAffiches += 10);
+                  },
+                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
                   label: const Text(
-                    "Donner +10 💎",
+                    "+10 💎",
                     style: TextStyle(color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -552,8 +687,11 @@ class _ParentViewState extends State<ParentView> {
                   ),
                 ),
                 ElevatedButton.icon(
-                  onPressed: widget.onClearDiamonds,
-                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  onPressed: () {
+                    widget.onClearDiamonds();
+                    setState(() => _diamantsAffiches = 0);
+                  },
+                  icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
                   label: const Text(
                     "Remettre à 0 💎",
                     style: TextStyle(color: Colors.white),
@@ -590,6 +728,15 @@ class _ParentViewState extends State<ParentView> {
               ),
               const SizedBox(height: 8),
             ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _ouvrirTestExercices,
+                icon: const Icon(Icons.science_outlined),
+                label: const Text("🧪 Tester les exercices (sans points)"),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

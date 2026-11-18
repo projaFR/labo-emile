@@ -27,6 +27,10 @@ class ExerciseView extends StatefulWidget {
   /// le résultat ; la vue n'affiche alors pas son propre écran de fin.
   final void Function(ResultatEtape)? surResultat;
 
+  /// Mode test parent : parcourt tous les exercices de la leçon sans
+  /// attribuer de diamants, d'étoiles ni modifier la mémoire d'Émile.
+  final bool modeTestParent;
+
   const ExerciseView({
     super.key,
     required this.lesson,
@@ -35,6 +39,7 @@ class ExerciseView extends StatefulWidget {
     required this.onPerfectScore,
     this.surFin,
     this.surResultat,
+    this.modeTestParent = false,
   });
 
   @override
@@ -118,8 +123,8 @@ class _ExerciseViewState extends State<ExerciseView> {
   /// vus lors des séances précédentes de cette leçon).
   Future<void> _startSession() async {
     final lesson = widget.lesson;
-    if (widget.surFin != null) {
-      // Révision du jour : on ne touche pas aux séances (seance_vus_*).
+    if (widget.surFin != null || widget.modeTestParent) {
+      // Révision du jour ou test parent : on ne touche pas aux séances (seance_vus_*).
       // (Appelé depuis initState ou didUpdateWidget : pas de setState.)
       _sessionIndices = List<int>.generate(lesson.exercices.length, (i) => i);
       _vus = {};
@@ -334,6 +339,24 @@ class _ExerciseViewState extends State<ExerciseView> {
     });
   }
 
+  String _libelleTypeTest(ExerciseModel ex) {
+    if (ex.typeExplicite == 'vraiFaux') return 'Vrai/Faux';
+    switch (ex.type) {
+      case ExerciseType.numericBlanks:
+        return 'Calcul';
+      case ExerciseType.textQcm:
+        return 'QCM';
+      case ExerciseType.singleInput:
+        return ex.estSaisieMot ? 'Mot' : 'Nombre';
+      case ExerciseType.ordre:
+        return 'Ordre';
+      case ExerciseType.association:
+        return 'Relier';
+      case ExerciseType.classement:
+        return 'Classer';
+    }
+  }
+
   // ── Validation QCM ────────────────────────────────────────────────────────
   void _validateQcm(ExerciseModel currentEx) {
     if (_isSubmitted) return;
@@ -417,8 +440,9 @@ class _ExerciseViewState extends State<ExerciseView> {
   /// bonne réponse montrée.
   void _appliquerResultat(bool estJuste) {
     final res = resoudreEssai(estJuste: estJuste, essai: _attempt);
-    // Mémoire par question : on note le résultat final (juste ou montrée).
-    if (res != ResultatEssai.reessayer) {
+    // Mémoire par question : on note le résultat final (juste ou montrée),
+    // sauf en mode test parent.
+    if (res != ResultatEssai.reessayer && !widget.modeTestParent) {
       MemoireService().enregistrer(
         cleQuestion(
           widget.lesson.titre,
@@ -489,10 +513,12 @@ class _ExerciseViewState extends State<ExerciseView> {
         _initCurrentExercise();
       } else {
         // Fin de séance : on retient les exercices vus, et l'étoile est
-        // donnée si tout est juste (au besoin au 2e essai).
-        _saveSeen();
+        // donnée si tout est juste (au besoin au 2e essai), sauf en test parent.
+        if (!widget.modeTestParent) {
+          _saveSeen();
+        }
         final etoile = etoileExercices(_failedFinal);
-        if (etoile) {
+        if (etoile && !widget.modeTestParent) {
           widget.onPerfectScore();
         }
         _envoyerResultat(etoile);
@@ -833,6 +859,59 @@ class _ExerciseViewState extends State<ExerciseView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.modeTestParent) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: const Text(
+                    '🧪 Mode test parent — aucun point ni mémoire enregistré',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: LaboPalette.ink,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 36,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _sessionIndices.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 6),
+                    itemBuilder: (_, idx) {
+                      final ex = widget.lesson.exercices[_sessionIndices[idx]];
+                      final actif = idx == _currentIndex;
+                      return ChoiceChip(
+                        label: Text(
+                          '${idx + 1}. ${_libelleTypeTest(ex)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight:
+                                actif ? FontWeight.bold : FontWeight.normal,
+                            color: actif ? Colors.white : LaboPalette.ink,
+                          ),
+                        ),
+                        selected: actif,
+                        selectedColor: LaboPalette.encre,
+                        onSelected: (_) => setState(() {
+                          _currentIndex = idx;
+                          _initCurrentExercise();
+                        }),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
               if (widget.surFin == null)
               Text(
                 'Exercice ${_currentIndex + 1} / ${_sessionIndices.length}',

@@ -610,10 +610,13 @@ class _HomeScreenState extends State<HomeScreen> {
         onRestauree: _rechargerApresRestauration,
         onDiamondsChanged: (amount) {
           setState(() {
-            _totalDiamonds += amount;
+            final nouveau = _totalDiamonds + amount;
+            _totalDiamonds = nouveau < 0 ? 0 : nouveau;
             SharedPreferences.getInstance().then((prefs) async {
               await prefs.setInt('emile_diamonds', _totalDiamonds);
-              LaboSyncService().signalerChangementLocal();
+              LaboSyncService().signalerChangementLocal(
+                remiseAZero: amount < 0,
+              );
             });
           });
         },
