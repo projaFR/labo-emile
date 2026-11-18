@@ -5,6 +5,8 @@ enum ExerciseType {
   textQcm, // Français QCM  : options textuelles
   singleInput, // Trou unique texte libre
   ordre, // Remettre des éléments dans l'ordre
+  association, // Relier des paires 2 à 2
+  classement, // Classer des éléments dans des catégories
 }
 
 class LessonModel {
@@ -92,6 +94,8 @@ class ExerciseModel {
   //          Plus besoin de répliquer cette logique dans chaque vue.
   ExerciseType get type {
     if (typeExplicite == 'ordre') return ExerciseType.ordre;
+    if (typeExplicite == 'association') return ExerciseType.association;
+    if (typeExplicite == 'classement') return ExerciseType.classement;
     if (typeExplicite == 'saisieMot' || typeExplicite == 'singleInput') {
       return ExerciseType.singleInput;
     }

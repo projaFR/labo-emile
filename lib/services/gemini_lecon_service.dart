@@ -169,6 +169,10 @@ Règles strictes :
          - mets "type": "vraiFaux", "options": ["Vrai", "Faux"], et "reponseAttendue": "Vrai" ou "Faux".
        * Pour remettre des nombres ou des mots dans l'ordre :
          - mets "type": "ordre", laisse "options": [], et mets la liste dans le BON ordre dans "reponsesMultiples" (au moins 3 éléments).
+       * Pour associer des paires 2 à 2 :
+         - mets "type": "association", mets les éléments de gauche dans "options" et leurs correspondants dans le MÊME ordre dans "reponsesMultiples".
+       * Pour classer des éléments dans 2 ou 3 catégories :
+         - mets "type": "classement", mets les éléments dans "options" et la catégorie attendue de chacun dans le MÊME ordre dans "reponsesMultiples".
        * Pour une règle ou du français (QCM) :
          - mets 0 ou 1 "[?]" dans "question",
          - fournis exactement 4 "options",

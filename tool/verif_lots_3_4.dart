@@ -381,6 +381,22 @@ Future<void> main() async {
         'reponsesMultiples': ['12', '45', '108'],
         'astuceErreur': 'Compare les centaines d’abord.',
       },
+      {
+        'type': 'association',
+        'question': 'Relie chaque calcul à son résultat :',
+        'consigne': 'Associe les paires :',
+        'options': ['3 x 4', '5 x 5'],
+        'reponsesMultiples': ['12', '25'],
+        'astuceErreur': 'Révise les tables de 3 et 5.',
+      },
+      {
+        'type': 'classement',
+        'question': 'Classe ces mots :',
+        'consigne': 'Range dans la bonne boîte :',
+        'options': ['chien', 'courir', 'table'],
+        'reponsesMultiples': ['Nom', 'Verbe', 'Nom'],
+        'astuceErreur': 'Le verbe indique une action.',
+      },
     ],
     'quiz': [],
   }));
@@ -389,6 +405,8 @@ Future<void> main() async {
   assert(exD.explication == 'Hibou prend un -x au pluriel.');
   assert(leconLotD.lecon.exercices[1].type == ExerciseType.textQcm);
   assert(leconLotD.lecon.exercices[2].type == ExerciseType.ordre);
+  assert(leconLotD.lecon.exercices[3].type == ExerciseType.association);
+  assert(leconLotD.lecon.exercices[4].type == ExerciseType.classement);
 
   var typeInconnuRefuse = false;
   try {

@@ -41,6 +41,15 @@ String texteBonneReponse(ExerciseModel ex) {
   if (ex.type == ExerciseType.ordre && ex.reponsesMultiples.isNotEmpty) {
     return ex.reponsesMultiples.map((r) => r.trim()).join(' → ');
   }
+  if ((ex.type == ExerciseType.association ||
+          ex.type == ExerciseType.classement) &&
+      ex.options.length == ex.reponsesMultiples.length &&
+      ex.options.isNotEmpty) {
+    return [
+      for (var i = 0; i < ex.options.length; i++)
+        '${ex.options[i].trim()} → ${ex.reponsesMultiples[i].trim()}',
+    ].join(' ; ');
+  }
   if (ex.reponsesMultiples.isNotEmpty) {
     return ex.reponsesMultiples.map((r) => r.trim()).join(' ; ');
   }

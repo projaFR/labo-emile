@@ -9,6 +9,8 @@ const Set<String> kTypesExercicesConnus = {
   'saisieMot',
   'vraiFaux',
   'ordre',
+  'association',
+  'classement',
 };
 
 /// Résultat d'une analyse JSON de leçon (matière + modèle validé).
@@ -131,13 +133,23 @@ LeconImportee analyserJsonLecon(String rawText) {
         : [for (final r in rawMultiples) r.toString()];
 
     final rawTypePre = item['type'];
-    final estOrdre = rawTypePre is String && rawTypePre.trim() == 'ordre';
+    final typePre = rawTypePre is String ? rawTypePre.trim() : '';
+    final estOrdre = typePre == 'ordre';
+    final estPaires = typePre == 'association' || typePre == 'classement';
 
     if (estOrdre) {
       if (reponsesMultiples.length < 2) {
         throw FormatException(
           "❌ Exercice n°${i + 1} : un exercice 'ordre' doit avoir au moins "
           "2 éléments dans 'reponsesMultiples'.",
+        );
+      }
+    } else if (estPaires) {
+      if (optionsList.length < 2 ||
+          optionsList.length != reponsesMultiples.length) {
+        throw FormatException(
+          "❌ Exercice n°${i + 1} : '$typePre' doit avoir autant d'éléments "
+          "dans 'options' que dans 'reponsesMultiples' (au moins 2).",
         );
       }
     } else {
