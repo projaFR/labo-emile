@@ -29,6 +29,7 @@ const Map<String, _Type> _clesFixes = {
   'reglage_chrono_secondes': _Type.entier,
   'derniere_lecon_importee': _Type.texte,
   'revision_diamants_jour': _Type.texte,
+  'deleted_initial_lessons': _Type.listeTextes,
 };
 
 /// (préfixe ou suffixe, type) des clés dont le nom contient un titre de leçon.

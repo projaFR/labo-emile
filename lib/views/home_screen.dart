@@ -130,6 +130,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _loadProgress() async {
     final prefs = await SharedPreferences.getInstance();
+    final deletedInitial =
+        (prefs.getStringList('deleted_initial_lessons') ?? const []).toSet();
+
+    // Retirer les leçons de base que le parent a explicitement supprimées
+    if (deletedInitial.isNotEmpty) {
+      for (final m in _database.keys.toList()) {
+        _database[m]!.removeWhere((l) => deletedInitial.contains(l.titre));
+        if (_database[m]!.isEmpty) _database.remove(m);
+      }
+    }
 
     // Recharger les leçons personnalisées sauvegardées
     final String? customJson = prefs.getString('custom_lessons');
@@ -522,6 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _supprimerLecon(String titre) {
     Navigator.pop(context); // ferme l'Espace Parent
+    final estInitiale = _initialTitles.contains(titre);
     final aSupprimerSync = <(String, String)>[];
     for (final m in _database.keys) {
       for (final l in _database[m]!) {
@@ -537,17 +548,24 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_database[m]!.isEmpty) _database.remove(m);
       }
       _lessonsRewards.remove(titre);
-      if (_database.isEmpty) {
-        // Réinitialiser avec une copie indépendante (pas une référence partagée)
-        for (final e in InitialDatabase.data.entries) {
-          _database[e.key] = List<LessonModel>.from(e.value);
-        }
-      }
       if (_matiereFiltre != null && !_database.containsKey(_matiereFiltre)) {
         _matiereFiltre = null;
       }
     });
-    _saveCustomLessons().then((_) {
+    Future(() async {
+      if (estInitiale) {
+        final prefs = await SharedPreferences.getInstance();
+        final supprimees =
+            (prefs.getStringList('deleted_initial_lessons') ?? const [])
+                .toSet()
+              ..add(titre);
+        await prefs.setStringList(
+          'deleted_initial_lessons',
+          supprimees.toList()..sort(),
+        );
+        LaboSyncService().signalerChangementLocal();
+      }
+      await _saveCustomLessons();
       for (final p in aSupprimerSync) {
         LaboSyncService().signalerSuppressionLecon(p.$1, p.$2);
       }

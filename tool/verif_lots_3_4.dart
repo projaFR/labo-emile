@@ -193,6 +193,7 @@ Future<void> main() async {
     cartesDiamant: {'L1': '2026-11-16'},
     seanceVus: {'L1': ['0', '1']},
     memoireJson: mA.toJsonString(),
+    leconsBaseSupprimees: ['Stratégies Multiplications'],
   );
   final dist = ProgressionSync(
     diamants: 20,
@@ -203,11 +204,19 @@ Future<void> main() async {
     cartesDiamant: {'L1': '2026-11-17'},
     seanceVus: {'L1': ['1', '2']},
     memoireJson: mB.toJsonString(),
+    leconsBaseSupprimees: ['Pluriel en -OU'],
   );
   final resP = fusionnerProgression(loc, dist);
   assert(resP.fusionnee.diamants == 20);
   assert(resP.fusionnee.etoiles['L1']![0] && resP.fusionnee.etoiles['L1']![2]);
   assert(resP.fusionnee.seanceVus['L1']!.length == 3);
+  assert(resP.fusionnee.leconsBaseSupprimees.length == 2);
+  assert(
+    ProgressionSync.tryFromJsonString(resP.fusionnee.toJsonString())!
+            .leconsBaseSupprimees
+            .length ==
+        2,
+  );
   final memF = Memoire.lire(resP.fusionnee.memoireJson).memoire;
   assert(memF.etat('q1')!.reps == 2 && memF.etat('q2') != null);
 

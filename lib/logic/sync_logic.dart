@@ -303,6 +303,7 @@ class ProgressionSync {
   final Map<String, String> cartesDiamant;
   final Map<String, List<String>> seanceVus;
   final String memoireJson;
+  final List<String> leconsBaseSupprimees;
 
   const ProgressionSync({
     required this.diamants,
@@ -314,12 +315,14 @@ class ProgressionSync {
     required this.cartesDiamant,
     required this.seanceVus,
     required this.memoireJson,
+    this.leconsBaseSupprimees = const [],
   });
 
   String toJsonString() {
     final clesEtoiles = etoiles.keys.toList()..sort();
     final clesCartes = cartesDiamant.keys.toList()..sort();
     final clesVus = seanceVus.keys.toList()..sort();
+    final baseSuppr = List<String>.from(leconsBaseSupprimees)..sort();
     return jsonEncode({
       'v': 1,
       'diamants': diamants,
@@ -333,6 +336,7 @@ class ProgressionSync {
         for (final k in clesVus) k: (List<String>.from(seanceVus[k]!)..sort()),
       },
       'memoireJson': memoireJson,
+      if (baseSuppr.isNotEmpty) 'leconsBaseSupprimees': baseSuppr,
     });
   }
 
@@ -383,6 +387,11 @@ class ProgressionSync {
       }
 
       final mem = (m['memoireJson'] as String?) ?? Memoire().toJsonString();
+      final baseSuppr = <String>[
+        if (m['leconsBaseSupprimees'] is List)
+          for (final item in (m['leconsBaseSupprimees'] as List))
+            item.toString(),
+      ];
       return ProgressionSync(
         diamants: diamants < 0 ? 0 : diamants,
         diamantsModifieLe: modifieLe,
@@ -393,6 +402,7 @@ class ProgressionSync {
         cartesDiamant: cartes,
         seanceVus: vus,
         memoireJson: mem,
+        leconsBaseSupprimees: baseSuppr,
       );
     } catch (_) {
       return null;
@@ -527,6 +537,12 @@ ResultatFusionProgression fusionnerProgression(
           ? distante.derniereLeconImportee
           : (locale.derniereLeconImportee ?? distante.derniereLeconImportee);
 
+  final baseSuppr = {
+    ...locale.leconsBaseSupprimees,
+    ...distante.leconsBaseSupprimees,
+  }.toList()
+    ..sort();
+
   final fusionnee = ProgressionSync(
     diamants: diamants,
     diamantsModifieLe: modifieLe,
@@ -537,6 +553,7 @@ ResultatFusionProgression fusionnerProgression(
     cartesDiamant: cartesDiamant,
     seanceVus: seanceVus,
     memoireJson: memFusion.toJsonString(),
+    leconsBaseSupprimees: baseSuppr,
   );
 
   final jsonFusion = fusionnee.toJsonString();

@@ -609,6 +609,8 @@ class LaboSyncService extends ChangeNotifier {
       cartesDiamant: cartesDiamant,
       seanceVus: seanceVus,
       memoireJson: MemoireService().memoire.toJsonString(),
+      leconsBaseSupprimees:
+          prefs.getStringList('deleted_initial_lessons') ?? const [],
     );
   }
 
@@ -652,6 +654,15 @@ class LaboSyncService extends ChangeNotifier {
 
     await prefs.setString(MemoireService.kCle, p.memoireJson);
     await MemoireService().charger(forcer: true);
+
+    if (p.leconsBaseSupprimees.isEmpty) {
+      await prefs.remove('deleted_initial_lessons');
+    } else {
+      await prefs.setStringList(
+        'deleted_initial_lessons',
+        p.leconsBaseSupprimees,
+      );
+    }
 
     if (p.diamantsModifieLe.isNotEmpty) {
       meta.diamantsModifieLe = p.diamantsModifieLe;
