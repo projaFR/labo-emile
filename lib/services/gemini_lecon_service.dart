@@ -160,11 +160,12 @@ Règles strictes :
          - laisse "options" vide ("options": []),
          - s'il y a 1 seul "[?]", remplis "reponseAttendue" (nombre sans espaces, ex : "1000"),
          - s'il y a 2 "[?]" ou plus, remplis "reponsesMultiples" avec autant d'éléments exacts que de "[?]".
-       * Pour un mot à écrire (orthographe, conjugaison, vocabulaire — à privilégier sur les QCM en orthographe) :
-         - mets "type": "saisieMot", 1 "[?]" dans "question" (ex : "Des [?] (hibou)"),
+       * Pour un mot précis à écrire (UNIQUEMENT s'il y a 1 seul mot évident et sans ambiguïté, ex : orthographe ou conjugaison : "Des [?] (hibou)") :
+         - mets "type": "saisieMot", 1 "[?]" dans "question",
          - laisse "options" vide ("options": []),
-         - mets le mot attendu dans "reponseAttendue" (ex : "hiboux"),
-         - ajoute facultativement "reponsesAcceptees": [...] s'il y a plusieurs écritures justes.
+         - mets le mot unique attendu dans "reponseAttendue" (ex : "hiboux"),
+         - ajoute "reponsesAcceptees": [...] s'il y a d'autres écritures justes.
+         - INTERDIT d'utiliser "saisieMot" pour une définition, une phrase ou une question ouverte où plusieurs formulations sont possibles (utilise plutôt QCM, vraiFaux, association, classement ou ordre).
        * Pour une affirmation Vrai ou Faux :
          - mets "type": "vraiFaux", "options": ["Vrai", "Faux"], et "reponseAttendue": "Vrai" ou "Faux".
        * Pour remettre des nombres ou des mots dans l'ordre :

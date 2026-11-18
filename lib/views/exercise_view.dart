@@ -272,14 +272,35 @@ class _ExerciseViewState extends State<ExerciseView> {
     _appliquerResultat(allGood);
   }
 
-  String _normaliserTexte(String s) =>
-      s.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  String _normaliserTexte(String s) {
+    var t = s
+        .trim()
+        .replaceAll('’', "'")
+        .replaceAll('‘', "'")
+        .replaceAll(RegExp(r'^[\s.,!?]+|[\s.,!?]+$'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase();
+    return t;
+  }
+
+  String _sansArticle(String norm) => norm
+      .replaceFirst(RegExp(r"^(l'|le |la |les |un |une |des )"), '')
+      .trim();
 
   bool _estReponseMotValide(String saisie, ExerciseModel ex) {
     final norm = _normaliserTexte(saisie);
     if (norm.isEmpty) return false;
-    if (norm == _normaliserTexte(ex.reponseAttendue)) return true;
-    return ex.reponsesAcceptees.any((alt) => _normaliserTexte(alt) == norm);
+    final normSansArt = _sansArticle(norm);
+    bool match(String cible) {
+      final c = _normaliserTexte(cible);
+      if (c.isEmpty) return false;
+      if (norm == c) return true;
+      final cSansArt = _sansArticle(c);
+      return cSansArt.isNotEmpty && normSansArt == cSansArt;
+    }
+
+    if (match(ex.reponseAttendue)) return true;
+    return ex.reponsesAcceptees.any(match);
   }
 
   // ── Sélection d'une case QCM ───────────────────────────────────────────────
@@ -752,6 +773,9 @@ class _ExerciseViewState extends State<ExerciseView> {
     }
 
     final currentEx = _currentExercise;
+    final bool isVraiFaux =
+        currentEx.type == ExerciseType.textQcm &&
+        currentEx.typeExplicite == 'vraiFaux';
     final bool isQcm = currentEx.type == ExerciseType.textQcm;
     final bool isOrdre = currentEx.type == ExerciseType.ordre;
     final bool isAssociation = currentEx.type == ExerciseType.association;
@@ -854,41 +878,69 @@ class _ExerciseViewState extends State<ExerciseView> {
                           if (isOrdre) ...[
                             Container(
                               width: double.infinity,
-                              constraints: const BoxConstraints(minHeight: 54),
-                              padding: const EdgeInsets.all(10),
+                              constraints: const BoxConstraints(minHeight: 62),
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: LaboPalette.line),
+                                color: Colors.blue.shade50.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: LaboPalette.encre.withValues(alpha: 0.35),
+                                  width: 1.5,
+                                ),
                               ),
                               child: _ordreChoisisIndices.isEmpty
                                   ? const Center(
                                       child: Text(
-                                        'Clique sur les étiquettes ci-dessous dans le bon ordre',
+                                        '👆 Clique sur les étiquettes dans le bon ordre',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           fontSize: 13,
+                                          fontWeight: FontWeight.w500,
                                           color: LaboPalette.muted,
                                         ),
                                       ),
                                     )
                                   : Wrap(
-                                      spacing: 8,
+                                      spacing: 6,
                                       runSpacing: 8,
                                       alignment: WrapAlignment.center,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
                                       children: [
                                         for (var pos = 0;
                                             pos < _ordreChoisisIndices.length;
-                                            pos++)
+                                            pos++) ...[
+                                          if (pos > 0)
+                                            const Icon(
+                                              Icons.arrow_forward,
+                                              size: 14,
+                                              color: LaboPalette.encre,
+                                            ),
                                           InputChip(
+                                            avatar: CircleAvatar(
+                                              backgroundColor: LaboPalette.encre,
+                                              child: Text(
+                                                '${pos + 1}',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
                                             label: Text(
                                               _shuffledOptions[
                                                   _ordreChoisisIndices[pos]],
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
+                                                color: LaboPalette.encre,
                                               ),
                                             ),
-                                            backgroundColor: Colors.blue.shade50,
+                                            backgroundColor: Colors.white,
+                                            side: const BorderSide(
+                                              color: LaboPalette.encre,
+                                              width: 1.5,
+                                            ),
                                             onPressed: _isSubmitted
                                                 ? null
                                                 : () => setState(() {
@@ -896,6 +948,7 @@ class _ExerciseViewState extends State<ExerciseView> {
                                                           .removeAt(pos);
                                                     }),
                                           ),
+                                        ],
                                       ],
                                     ),
                             ),
@@ -909,11 +962,27 @@ class _ExerciseViewState extends State<ExerciseView> {
                                     idx < _shuffledOptions.length;
                                     idx++)
                                   ActionChip(
-                                    label: Text(_shuffledOptions[idx]),
+                                    elevation: _ordreChoisisIndices.contains(idx)
+                                        ? 0
+                                        : 2,
+                                    label: Text(
+                                      _shuffledOptions[idx],
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: _ordreChoisisIndices.contains(idx)
+                                            ? Colors.grey
+                                            : LaboPalette.ink,
+                                      ),
+                                    ),
                                     backgroundColor:
                                         _ordreChoisisIndices.contains(idx)
                                             ? Colors.grey.shade200
                                             : Colors.white,
+                                    side: BorderSide(
+                                      color: _ordreChoisisIndices.contains(idx)
+                                          ? Colors.transparent
+                                          : LaboPalette.line,
+                                    ),
                                     onPressed: _isSubmitted ||
                                             _ordreChoisisIndices.contains(idx)
                                         ? null
@@ -938,8 +1007,41 @@ class _ExerciseViewState extends State<ExerciseView> {
                             const SizedBox(height: 8),
                           ],
 
+                          // Boutons Vrai / Faux (2 grandes cartes côte à côte)
+                          if (isVraiFaux)
+                            Row(
+                              children: [
+                                for (var i = 0;
+                                    i < _shuffledOptions.length;
+                                    i++) ...[
+                                  if (i > 0) const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildCarteVraiFaux(
+                                      option: _shuffledOptions[i],
+                                      estVrai: _shuffledOptions[i]
+                                              .trim()
+                                              .toLowerCase() ==
+                                          'vrai',
+                                      estSelectionnee: _selectedOptions.any(
+                                        (s) =>
+                                            s.trim().toUpperCase() ==
+                                            _shuffledOptions[i]
+                                                .trim()
+                                                .toUpperCase(),
+                                      ),
+                                      estBonne: _shuffledOptions[i]
+                                              .trim()
+                                              .toUpperCase() ==
+                                          currentEx.reponseAttendue
+                                              .trim()
+                                              .toUpperCase(),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            )
                           // Boutons options QCM (mélangés)
-                          if (isQcm)
+                          else if (isQcm)
                             ..._shuffledOptions.map((option) {
                               final bool isSelected = _selectedOptions.any(
                                 (s) =>
@@ -1095,79 +1197,162 @@ class _ExerciseViewState extends State<ExerciseView> {
     Color(0xFFDB2777),
   ];
 
+  Widget _buildCarteVraiFaux({
+    required String option,
+    required bool estVrai,
+    required bool estSelectionnee,
+    required bool estBonne,
+  }) {
+    final baseCouleur = estVrai ? LaboPalette.good : LaboPalette.rouge;
+    Color fond = Colors.white;
+    Color bord = baseCouleur.withValues(alpha: 0.35);
+    double epaisseur = 1.5;
+
+    if (_isSubmitted) {
+      if (estBonne) {
+        fond = Colors.green.shade50;
+        bord = LaboPalette.good;
+        epaisseur = 2.5;
+      } else if (estSelectionnee) {
+        fond = Colors.red.shade50;
+        bord = LaboPalette.rouge;
+        epaisseur = 2.5;
+      }
+    } else if (estSelectionnee) {
+      fond = baseCouleur.withValues(alpha: 0.12);
+      bord = baseCouleur;
+      epaisseur = 2.5;
+    }
+
+    return InkWell(
+      onTap: _isSubmitted ? null : () => _fillSlot(option),
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: fond,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: bord, width: epaisseur),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              estVrai ? Icons.check_circle_rounded : Icons.cancel_rounded,
+              size: 32,
+              color: baseCouleur,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              option,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: baseCouleur,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAssociationWidget(ExerciseModel ex) {
     final n = ex.options.length;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final aide = _assocGaucheActif != null
+        ? '👉 Maintenant touche son binôme à droite !'
+        : (_assocPaires.length == n
+              ? '✅ Toutes les paires sont reliées !'
+              : '👆 Touche une carte à gauche, puis sa paire à droite');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < n; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: _boutonPaire(
-                    texte: ex.options[i],
-                    numero: _assocPaires.containsKey(i) ? i + 1 : null,
-                    actif: _assocGaucheActif == i,
-                    couleur: _assocPaires.containsKey(i)
-                        ? _couleursPaires[i % _couleursPaires.length]
-                        : null,
-                    onTap: _isSubmitted
-                        ? null
-                        : () => setState(() {
-                              if (_assocPaires.containsKey(i)) {
-                                _assocPaires.remove(i);
-                              }
-                              _assocGaucheActif =
-                                  _assocGaucheActif == i ? null : i;
-                            }),
-                  ),
-                ),
-            ],
+        Text(
+          aide,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _assocGaucheActif != null
+                ? LaboPalette.encre
+                : LaboPalette.muted,
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var j = 0; j < _shuffledOptions.length; j++)
-                Builder(
-                  builder: (_) {
-                    final gaucheLie = _assocPaires.entries
-                        .where((e) => e.value == j)
-                        .map((e) => e.key)
-                        .firstOrNull;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < n; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: _boutonPaire(
-                        texte: _shuffledOptions[j],
-                        numero: gaucheLie != null ? gaucheLie + 1 : null,
-                        actif: false,
-                        couleur: gaucheLie != null
-                            ? _couleursPaires[gaucheLie % _couleursPaires.length]
+                        texte: ex.options[i],
+                        numero: _assocPaires.containsKey(i) ? i + 1 : null,
+                        actif: _assocGaucheActif == i,
+                        couleur: _assocPaires.containsKey(i)
+                            ? _couleursPaires[i % _couleursPaires.length]
                             : null,
                         onTap: _isSubmitted
                             ? null
                             : () => setState(() {
-                                  if (_assocGaucheActif != null) {
-                                    _assocPaires.removeWhere(
-                                      (_, val) => val == j,
-                                    );
-                                    _assocPaires[_assocGaucheActif!] = j;
-                                    _assocGaucheActif = null;
-                                  } else if (gaucheLie != null) {
-                                    _assocPaires.remove(gaucheLie);
+                                  if (_assocPaires.containsKey(i)) {
+                                    _assocPaires.remove(i);
                                   }
+                                  _assocGaucheActif =
+                                      _assocGaucheActif == i ? null : i;
                                 }),
                       ),
-                    );
-                  },
-                ),
-            ],
-          ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var j = 0; j < _shuffledOptions.length; j++)
+                    Builder(
+                      builder: (_) {
+                        final gaucheLie = _assocPaires.entries
+                            .where((e) => e.value == j)
+                            .map((e) => e.key)
+                            .firstOrNull;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _boutonPaire(
+                            texte: _shuffledOptions[j],
+                            numero: gaucheLie != null ? gaucheLie + 1 : null,
+                            actif: false,
+                            couleur: gaucheLie != null
+                                ? _couleursPaires[
+                                    gaucheLie % _couleursPaires.length]
+                                : null,
+                            onTap: _isSubmitted
+                                ? null
+                                : () => setState(() {
+                                      if (_assocGaucheActif != null) {
+                                        _assocPaires.removeWhere(
+                                          (_, val) => val == j,
+                                        );
+                                        _assocPaires[_assocGaucheActif!] = j;
+                                        _assocGaucheActif = null;
+                                      } else if (gaucheLie != null) {
+                                        _assocPaires.remove(gaucheLie);
+                                      }
+                                    }),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1231,63 +1416,126 @@ class _ExerciseViewState extends State<ExerciseView> {
       for (var i = 0; i < ex.options.length; i++)
         if (!_classementChoix.containsKey(i)) i,
     ];
+    final aide = _classementItemActif != null
+        ? '👉 Maintenant touche la boîte pour « ${ex.options[_classementItemActif!]} » !'
+        : (nonPlaces.isEmpty
+              ? '✅ Tous les mots sont rangés !'
+              : '👆 Touche un mot ci-dessous, puis sa boîte');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final cat in _categoriesClassement)
-          GestureDetector(
-            onTap: _isSubmitted || _classementItemActif == null
-                ? null
-                : () => setState(() {
-                      _classementChoix[_classementItemActif!] = cat;
-                      _classementItemActif = null;
-                    }),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _classementItemActif != null
-                    ? Colors.blue.shade50
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _classementItemActif != null
-                      ? LaboPalette.encre
-                      : LaboPalette.line,
-                  width: _classementItemActif != null ? 2 : 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cat,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: LaboPalette.encre,
+        Text(
+          aide,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _classementItemActif != null
+                ? LaboPalette.encre
+                : LaboPalette.muted,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (var idxCat = 0; idxCat < _categoriesClassement.length; idxCat++)
+          Builder(
+            builder: (_) {
+              final cat = _categoriesClassement[idxCat];
+              final couleur = _couleursPaires[idxCat % _couleursPaires.length];
+              final places = <int>[
+                for (var i = 0; i < ex.options.length; i++)
+                  if (_classementChoix[i] == cat) i,
+              ];
+              return GestureDetector(
+                onTap: _isSubmitted || _classementItemActif == null
+                    ? null
+                    : () => setState(() {
+                          _classementChoix[_classementItemActif!] = cat;
+                          _classementItemActif = null;
+                        }),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _classementItemActif != null
+                        ? couleur.withValues(alpha: 0.12)
+                        : couleur.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _classementItemActif != null
+                          ? couleur
+                          : couleur.withValues(alpha: 0.4),
+                      width: _classementItemActif != null ? 2 : 1.5,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      for (var i = 0; i < ex.options.length; i++)
-                        if (_classementChoix[i] == cat)
-                          InputChip(
-                            label: Text(ex.options[i]),
-                            onPressed: _isSubmitted
-                                ? null
-                                : () => setState(() {
-                                      _classementChoix.remove(i);
-                                    }),
+                      Row(
+                        children: [
+                          Icon(Icons.inventory_2_rounded,
+                              size: 16, color: couleur),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              cat,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: couleur,
+                              ),
+                            ),
                           ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: couleur.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${places.length}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: couleur,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (places.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final i in places)
+                              InputChip(
+                                label: Text(
+                                  ex.options[i],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                backgroundColor: Colors.white,
+                                side: BorderSide(color: couleur),
+                                onPressed: _isSubmitted
+                                    ? null
+                                    : () => setState(() {
+                                          _classementChoix.remove(i);
+                                        }),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         const SizedBox(height: 6),
         if (nonPlaces.isNotEmpty)
@@ -1298,7 +1546,18 @@ class _ExerciseViewState extends State<ExerciseView> {
             children: [
               for (final i in nonPlaces)
                 ChoiceChip(
-                  label: Text(ex.options[i]),
+                  elevation: 2,
+                  label: Text(
+                    ex.options[i],
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: _classementItemActif == i
+                          ? Colors.white
+                          : LaboPalette.ink,
+                    ),
+                  ),
+                  selectedColor: LaboPalette.encre,
+                  backgroundColor: Colors.white,
                   selected: _classementItemActif == i,
                   onSelected: _isSubmitted
                       ? null
