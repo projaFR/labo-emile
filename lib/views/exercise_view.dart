@@ -78,6 +78,11 @@ class _ExerciseViewState extends State<ExerciseView> {
   // ── Association (paires) & Classement (catégories) ────────────────────────
   int? _assocGaucheActif;
   final Map<int, int> _assocPaires = {};
+  final GlobalKey _assocStackKey = GlobalKey();
+  List<GlobalKey> _assocKeysGauche = [];
+  List<GlobalKey> _assocKeysDroite = [];
+  final ValueNotifier<List<_PaireLigne>> _lignesAssocNotif =
+      ValueNotifier<List<_PaireLigne>>(const []);
   int? _classementItemActif;
   final Map<int, String> _classementChoix = {};
   List<String> _categoriesClassement = [];
@@ -104,6 +109,7 @@ class _ExerciseViewState extends State<ExerciseView> {
 
   @override
   void dispose() {
+    _lignesAssocNotif.dispose();
     _disposeInputs();
     super.dispose();
   }
@@ -209,6 +215,9 @@ class _ExerciseViewState extends State<ExerciseView> {
     _ordreChoisisIndices.clear();
     _assocGaucheActif = null;
     _assocPaires.clear();
+    _assocKeysGauche = [];
+    _assocKeysDroite = [];
+    _lignesAssocNotif.value = const [];
     _classementItemActif = null;
     _classementChoix.clear();
     _categoriesClassement = [];
@@ -229,6 +238,14 @@ class _ExerciseViewState extends State<ExerciseView> {
     } else if (currentEx.type == ExerciseType.association) {
       _shuffledOptions = List<String>.from(currentEx.reponsesMultiples)
         ..shuffle(Random());
+      _assocKeysGauche = List.generate(
+        currentEx.options.length,
+        (_) => GlobalKey(),
+      );
+      _assocKeysDroite = List.generate(
+        _shuffledOptions.length,
+        (_) => GlobalKey(),
+      );
     } else if (currentEx.type == ExerciseType.classement) {
       _categoriesClassement =
           [for (final c in currentEx.reponsesMultiples) c.trim()]
@@ -446,6 +463,7 @@ class _ExerciseViewState extends State<ExerciseView> {
           _ordreChoisisIndices.clear();
           _assocGaucheActif = null;
           _assocPaires.clear();
+          _lignesAssocNotif.value = const [];
           _classementItemActif = null;
           _classementChoix.clear();
           break;
@@ -1257,6 +1275,47 @@ class _ExerciseViewState extends State<ExerciseView> {
     );
   }
 
+  void _planifierMajLignesAssoc() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final stackBox =
+          _assocStackKey.currentContext?.findRenderObject() as RenderBox?;
+      if (stackBox == null || !stackBox.hasSize) return;
+      final nouvelles = <_PaireLigne>[];
+      for (final e in _assocPaires.entries) {
+        final i = e.key;
+        final j = e.value;
+        if (i < 0 ||
+            i >= _assocKeysGauche.length ||
+            j < 0 ||
+            j >= _assocKeysDroite.length) {
+          continue;
+        }
+        final boxG =
+            _assocKeysGauche[i].currentContext?.findRenderObject() as RenderBox?;
+        final boxD =
+            _assocKeysDroite[j].currentContext?.findRenderObject() as RenderBox?;
+        if (boxG == null || boxD == null || !boxG.hasSize || !boxD.hasSize) {
+          continue;
+        }
+        final debut = stackBox.globalToLocal(
+          boxG.localToGlobal(Offset(boxG.size.width, boxG.size.height / 2)),
+        );
+        final fin = stackBox.globalToLocal(
+          boxD.localToGlobal(Offset(0, boxD.size.height / 2)),
+        );
+        nouvelles.add(
+          _PaireLigne(
+            debut: debut,
+            fin: fin,
+            couleur: _couleursPaires[i % _couleursPaires.length],
+          ),
+        );
+      }
+      _lignesAssocNotif.value = nouvelles;
+    });
+  }
+
   Widget _buildAssociationWidget(ExerciseModel ex) {
     final n = ex.options.length;
     final aide = _assocGaucheActif != null
@@ -1264,6 +1323,7 @@ class _ExerciseViewState extends State<ExerciseView> {
         : (_assocPaires.length == n
               ? '✅ Toutes les paires sont reliées !'
               : '👆 Touche une carte à gauche, puis sa paire à droite');
+    _planifierMajLignesAssoc();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1279,78 +1339,133 @@ class _ExerciseViewState extends State<ExerciseView> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Stack(
+          key: _assocStackKey,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var i = 0; i < n; i++)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _boutonPaire(
-                        texte: ex.options[i],
-                        numero: _assocPaires.containsKey(i) ? i + 1 : null,
-                        actif: _assocGaucheActif == i,
-                        couleur: _assocPaires.containsKey(i)
-                            ? _couleursPaires[i % _couleursPaires.length]
-                            : null,
-                        onTap: _isSubmitted
-                            ? null
-                            : () => setState(() {
-                                  if (_assocPaires.containsKey(i)) {
-                                    _assocPaires.remove(i);
-                                  }
-                                  _assocGaucheActif =
-                                      _assocGaucheActif == i ? null : i;
-                                }),
-                      ),
-                    ),
-                ],
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<List<_PaireLigne>>(
+                  valueListenable: _lignesAssocNotif,
+                  builder: (_, lignes, __) => CustomPaint(
+                    painter: _LignesAssociationPainter(lignes),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var j = 0; j < _shuffledOptions.length; j++)
-                    Builder(
-                      builder: (_) {
-                        final gaucheLie = _assocPaires.entries
-                            .where((e) => e.value == j)
-                            .map((e) => e.key)
-                            .firstOrNull;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _boutonPaire(
-                            texte: _shuffledOptions[j],
-                            numero: gaucheLie != null ? gaucheLie + 1 : null,
-                            actif: false,
-                            couleur: gaucheLie != null
-                                ? _couleursPaires[
-                                    gaucheLie % _couleursPaires.length]
-                                : null,
-                            onTap: _isSubmitted
-                                ? null
-                                : () => setState(() {
-                                      if (_assocGaucheActif != null) {
-                                        _assocPaires.removeWhere(
-                                          (_, val) => val == j,
-                                        );
-                                        _assocPaires[_assocGaucheActif!] = j;
-                                        _assocGaucheActif = null;
-                                      } else if (gaucheLie != null) {
-                                        _assocPaires.remove(gaucheLie);
-                                      }
-                                    }),
-                          ),
-                        );
-                      },
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.shade200.withValues(alpha: 0.6),
+                      ),
                     ),
-                ],
-              ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < n; i++)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              bottom: i == n - 1 ? 0 : 8,
+                            ),
+                            child: KeyedSubtree(
+                              key: i < _assocKeysGauche.length
+                                  ? _assocKeysGauche[i]
+                                  : null,
+                              child: _boutonPaire(
+                                texte: ex.options[i],
+                                numero:
+                                    _assocPaires.containsKey(i) ? i + 1 : null,
+                                actif: _assocGaucheActif == i,
+                                couleur: _assocPaires.containsKey(i)
+                                    ? _couleursPaires[
+                                        i % _couleursPaires.length]
+                                    : null,
+                                onTap: _isSubmitted
+                                    ? null
+                                    : () => setState(() {
+                                          if (_assocPaires.containsKey(i)) {
+                                            _assocPaires.remove(i);
+                                          }
+                                          _assocGaucheActif =
+                                              _assocGaucheActif == i ? null : i;
+                                        }),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 38),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.amber.shade200.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var j = 0; j < _shuffledOptions.length; j++)
+                          Builder(
+                            builder: (_) {
+                              final gaucheLie = _assocPaires.entries
+                                  .where((e) => e.value == j)
+                                  .map((e) => e.key)
+                                  .firstOrNull;
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  bottom:
+                                      j == _shuffledOptions.length - 1 ? 0 : 8,
+                                ),
+                                child: KeyedSubtree(
+                                  key: j < _assocKeysDroite.length
+                                      ? _assocKeysDroite[j]
+                                      : null,
+                                  child: _boutonPaire(
+                                    texte: _shuffledOptions[j],
+                                    numero: gaucheLie != null
+                                        ? gaucheLie + 1
+                                        : null,
+                                    actif: false,
+                                    couleur: gaucheLie != null
+                                        ? _couleursPaires[
+                                            gaucheLie % _couleursPaires.length]
+                                        : null,
+                                    onTap: _isSubmitted
+                                        ? null
+                                        : () => setState(() {
+                                              if (_assocGaucheActif != null) {
+                                                _assocPaires.removeWhere(
+                                                  (_, val) => val == j,
+                                                );
+                                                _assocPaires[
+                                                    _assocGaucheActif!] = j;
+                                                _assocGaucheActif = null;
+                                              } else if (gaucheLie != null) {
+                                                _assocPaires.remove(gaucheLie);
+                                              }
+                                            }),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1571,4 +1686,49 @@ class _ExerciseViewState extends State<ExerciseView> {
       ],
     );
   }
+}
+
+class _PaireLigne {
+  final Offset debut;
+  final Offset fin;
+  final Color couleur;
+
+  const _PaireLigne({
+    required this.debut,
+    required this.fin,
+    required this.couleur,
+  });
+}
+
+class _LignesAssociationPainter extends CustomPainter {
+  final List<_PaireLigne> lignes;
+
+  const _LignesAssociationPainter(this.lignes);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final l in lignes) {
+      final paint = Paint()
+        ..color = l.couleur
+        ..strokeWidth = 3.5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round;
+
+      final midX = (l.debut.dx + l.fin.dx) / 2;
+      final path = Path()
+        ..moveTo(l.debut.dx, l.debut.dy)
+        ..cubicTo(midX, l.debut.dy, midX, l.fin.dy, l.fin.dx, l.fin.dy);
+      canvas.drawPath(path, paint);
+
+      final dotPaint = Paint()
+        ..color = l.couleur
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(l.debut, 4.5, dotPaint);
+      canvas.drawCircle(l.fin, 4.5, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LignesAssociationPainter oldDelegate) =>
+      oldDelegate.lignes != lignes;
 }
