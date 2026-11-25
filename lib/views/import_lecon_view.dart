@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../logic/lecon_json_logic.dart';
 import '../logic/trophees_logic.dart';
@@ -30,6 +31,8 @@ class _ImportLeconViewState extends State<ImportLeconView> {
 
   final List<PhotoLecon> _photos = [];
   String? _cleGemini;
+  String? _modelePrefere;
+  bool _chargementModeles = false;
   bool _cleChargee = false;
   UtilisationGeminiJour? _utilisationGemini;
   bool _enCours = false;
@@ -45,13 +48,115 @@ class _ImportLeconViewState extends State<ImportLeconView> {
 
   Future<void> _chargerCle() async {
     final cle = await lireCleGemini();
+    final modele = await lireModeleGeminiPrefere();
     final util = await GeminiQuotaStore.charger();
     if (!mounted) return;
     setState(() {
       _cleGemini = cle;
+      _modelePrefere = modele;
       _utilisationGemini = util;
       _cleChargee = true;
     });
+  }
+
+  Future<void> _choisirModeleGemini() async {
+    final cle = _cleGemini;
+    if (cle == null || _chargementModeles) return;
+    setState(() {
+      _chargementModeles = true;
+      _erreurPhoto = null;
+    });
+    final client = http.Client();
+    try {
+      final modeles = await listerModelesGeminiCompatibles(
+        client: client,
+        apiKey: cle,
+        timeout: const Duration(seconds: 15),
+      );
+      if (!mounted) return;
+      final choix = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('🤖 Modèles Gemini disponibles'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: Row(
+                children: [
+                  Icon(
+                    _modelePrefere == null
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: 18,
+                    color: LaboPalette.encre,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      '⚡ Automatique (recommandé)',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            if (modeles.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  'Aucun modèle retourné par Google pour cette clé.',
+                  style: TextStyle(color: LaboPalette.muted, fontSize: 13),
+                ),
+              )
+            else
+              for (final m in modeles)
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, m),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _modelePrefere == m
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        size: 18,
+                        color: LaboPalette.encre,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          m,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: _modelePrefere == m
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      );
+      if (choix == null || !mounted) return;
+      final nouveau = choix.isEmpty ? null : choix;
+      await enregistrerModeleGeminiPrefere(nouveau);
+      if (!mounted) return;
+      setState(() => _modelePrefere = nouveau);
+    } on ErreurGeminiLecon catch (e) {
+      if (!mounted) return;
+      setState(() => _erreurPhoto = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _erreurPhoto = 'Impossible de charger la liste des modèles.',
+      );
+    } finally {
+      client.close();
+      if (mounted) setState(() => _chargementModeles = false);
+    }
   }
 
   @override
@@ -129,6 +234,7 @@ class _ImportLeconViewState extends State<ImportLeconView> {
         apiKey: cle,
         photos: List.of(_photos),
         commentaireParent: _precisionController.text,
+        modelePrefere: _modelePrefere,
         surUtilisation: (jetons) {
           appelsRecus++;
           jetonsRecus += jetons;
@@ -383,6 +489,36 @@ class _ImportLeconViewState extends State<ImportLeconView> {
         if (_utilisationGemini != null) ...[
           const SizedBox(height: 10),
           _buildJaugeGemini(_utilisationGemini!),
+        ],
+        if (_cleGemini != null) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Modèle : ${_modelePrefere ?? '⚡ Automatique (future-proof)'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: LaboPalette.muted,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed:
+                    (_enCours || _chargementModeles) ? null : _choisirModeleGemini,
+                icon: _chargementModeles
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.tune, size: 16),
+                label: const Text('Choisir', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
         ],
         if (_enCours) ...[
           const SizedBox(height: 12),

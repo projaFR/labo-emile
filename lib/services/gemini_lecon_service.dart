@@ -6,8 +6,9 @@ import 'package:http/http.dart' as http;
 
 import '../logic/lecon_json_logic.dart';
 
-/// Modèle Gemini gratuit et rapide adapté à la lecture de photos de cahiers.
-const String kModeleGeminiLecon = 'gemini-3.5-flash-lite';
+/// Alias officiel toujours pointé vers le dernier modèle Gemini Flash-Lite
+/// stable (avec découverte automatique via `/v1beta/models` en repli).
+const String kModeleGeminiLecon = 'gemini-flash-lite-latest';
 
 String _modeleGeminiActif = kModeleGeminiLecon;
 
@@ -56,18 +57,19 @@ List<String> classerModelesGeminiDisponibles(
     final id = rawName.startsWith('models/')
         ? rawName.substring('models/'.length)
         : rawName;
-    if (id.isEmpty || exclus.contains(id) || !id.startsWith('gemini-')) {
+    if (id.isEmpty || exclus.contains(id)) {
       continue;
     }
     if (_motsExclusModeleGemini.any(id.contains)) continue;
 
     var score = 0;
+    if (id.startsWith('gemini-')) score += 20;
     if (id.contains('flash')) score += 1000;
-    if (id.contains('flash-lite')) score += 300;
+    if (id.contains('flash-lite')) score += 400;
     if (id == 'gemini-flash-lite-latest' || id == 'gemini-flash-latest') {
-      score += 150;
+      score += 250;
     }
-    if (!id.contains('preview') && !id.contains('exp')) score += 50;
+    if (!id.contains('preview') && !id.contains('exp')) score += 200;
     final m = regVersion.firstMatch(id);
     if (m != null) {
       final ver = double.tryParse(m.group(1)!) ?? 0;
@@ -197,6 +199,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
   required String apiKey,
   required List<PhotoLecon> photos,
   String commentaireParent = '',
+  String? modelePrefere,
   http.Client? client,
   Duration timeout = const Duration(seconds: 120),
   void Function(int jetons)? surUtilisation,
@@ -241,6 +244,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
       client: c,
       apiKey: cle,
       contents: contents,
+      modelePrefere: modelePrefere,
       timeout: timeout,
       surUtilisation: surUtilisation,
     );
@@ -272,6 +276,7 @@ Future<LeconImportee> genererLeconDepuisPhotos({
         client: c,
         apiKey: cle,
         contents: correctionContents,
+        modelePrefere: modelePrefere,
         timeout: timeout,
         surUtilisation: surUtilisation,
       );
@@ -291,11 +296,28 @@ Future<LeconImportee> genererLeconDepuisPhotos({
 void _verifierStatutHttpGemini(
   int statusCode, {
   bool autoriserRepli = false,
+  String body = '',
 }) {
-  if (statusCode == 400 || statusCode == 401 || statusCode == 403) {
+  if (statusCode == 401 || statusCode == 403) {
     throw const ErreurGeminiLecon(
       'Clé Gemini refusée. Vérifie ta clé dans l’Espace Parent.',
     );
+  }
+  if (statusCode == 400) {
+    final bas = body.toLowerCase();
+    final estCleInvalide = bas.contains('api_key_invalid') ||
+        bas.contains('api key not valid') ||
+        bas.contains('api key expired');
+    if (estCleInvalide) {
+      throw const ErreurGeminiLecon(
+        'Clé Gemini refusée. Vérifie ta clé dans l’Espace Parent.',
+      );
+    }
+    const err = ErreurGeminiLecon(
+      'Ce modèle Gemini a refusé la requête (erreur 400).',
+    );
+    if (autoriserRepli) throw const _ModeleGeminiIndisponibleException(err);
+    throw err;
   }
   if (statusCode == 404) {
     const err = ErreurGeminiLecon(
@@ -326,12 +348,15 @@ Future<String> _appelerAvecRepliModele({
   required http.Client client,
   required String apiKey,
   required List<Map<String, dynamic>> contents,
+  String? modelePrefere,
   required Duration timeout,
   void Function(int jetons)? surUtilisation,
 }) async {
   final timeoutParEssai =
       timeout.inSeconds > 25 ? const Duration(seconds: 25) : timeout;
-  final initial = _modeleGeminiActif;
+  final pref = modelePrefere?.trim();
+  final initial =
+      (pref != null && pref.isNotEmpty) ? pref : _modeleGeminiActif;
   try {
     return await _appelerGemini(
       client: client,
@@ -350,7 +375,7 @@ Future<String> _appelerAvecRepliModele({
       exclus: {initial},
     );
     var derniereErreur = premierEchec.erreurDirecte;
-    for (final candidat in candidats.take(3)) {
+    for (final candidat in candidats.take(6)) {
       try {
         final reponse = await _appelerGemini(
           client: client,
@@ -422,7 +447,11 @@ Future<String> _appelerGemini({
     );
   }
 
-  _verifierStatutHttpGemini(res.statusCode, autoriserRepli: autoriserRepli);
+  _verifierStatutHttpGemini(
+    res.statusCode,
+    autoriserRepli: autoriserRepli,
+    body: res.body,
+  );
 
   try {
     final json = jsonDecode(res.body) as Map<String, dynamic>;
